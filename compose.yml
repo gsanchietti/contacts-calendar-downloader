@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: docker.io/library/traefik:v3.5.3
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      # Use file provider instead of Docker provider
+      - "--configFile=/etc/traefik/traefik.yml"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - traefik-letsencrypt:/letsencrypt:z
+      - ./traefik.yml:/etc/traefik/traefik.yml:z
+      - ./traefik-dynamic.yml:/etc/traefik/dynamic.yml:z
+    environment:
+      - DOMAIN=${DOMAIN}
+      - ACME_EMAIL=${ACME_EMAIL}
+    networks:
+      - proxy
+
+  google-contacts-downloader:
+    build: .
+    container_name: google-contacts-downloader
+    restart: unless-stopped
+    environment:
+      # Database path (will be mounted as volume)
+      - GOOGLE_DATABASE=/app/data/credentials.db
+      # Encryption key (should be set in .env file)
+      - GOOGLE_ENCRYPTION_KEY=${GOOGLE_ENCRYPTION_KEY}
+      # Tokens directory
+      - GOOGLE_TOKENS_DIR=/app/data/tokens
+      # Flask configuration
+      - FLASK_ENV=${FLASK_ENV}
+      # Google API credentials
+      - GOOGLE_CREDENTIALS=/app/credentials/credentials.json
+      # Set oauth callback to Traefik router
+      - OAUTH_REDIRECT_URI=https://${DOMAIN}/oauth2callback
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist database and credentials
+      - app-data:/app/data:z
+      # Credentials for Google API (mount your credentials.json here)
+      - ./credentials/:/app/credentials/:z
+    networks:
+      - proxy
+    depends_on:
+      - traefik
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  proxy:
+    driver: bridge
+
+volumes:
+  traefik-letsencrypt:
+    driver: local
+  app-data:
+    driver: local

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy & Terms of Service - Google Contacts Downloader</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1a73e8;
+            border-bottom: 3px solid #1a73e8;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #1a73e8;
+            margin-top: 30px;
+        }
+        h3 {
+            color: #666;
+        }
+        .highlight {
+            background-color: #e8f0fe;
+            padding: 15px;
+            border-left: 4px solid #1a73e8;
+            margin: 20px 0;
+        }
+        .important {
+            background-color: #fef7e0;
+            padding: 15px;
+            border-left: 4px solid #f9ab00;
+            margin: 20px 0;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            color: #666;
+        }
+        a {
+            color: #1a73e8;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Privacy Policy & Terms of Service for Google Contacts Downloader</h1>
+        <p><strong>Last Updated:</strong> October 8, 2025</p>
+        
+        <p>This document outlines our Privacy Policy and Terms of Service for <strong>Google Contacts Downloader</strong> (referred to as "we," "us," or "our") when you use our software (the "Service").</p>
+        
+        <p>We respect your privacy and are committed to protecting it through our compliance with this policy. By using our Service, you agree to the terms outlined in this document.</p>
+
+        <h1>PRIVACY POLICY</h1>
+
+        <h2>1. Information We Access and How We Use It</h2>
+        
+        <p>Our Service is designed to interact with your Google Account to provide you with contact download functionalities.</p>
+
+        <h3>Google Account Data Access and Scope</h3>
+        
+        <p>When you connect your Google Account, you grant our Service permission to access specific information. We access this data solely for the purpose of operating the Service for you.</p>
+
+        <p>The specific data we may access includes:</p>
+        <ul>
+            <li><strong>Email Address:</strong> Your primary email address associated with your Google Account.</li>
+            <li><strong>Profile Information (openid):</strong> Basic profile information (e.g., name, profile picture, locale) as provided by the Google OpenID Connect standard.</li>
+            <li><strong>Google Contacts:</strong> Access to your personal Google Contacts list.</li>
+        </ul>
+
+        <div class="highlight">
+            <p><strong>Crucially, our access to all of your Google information—including your Email, Profile, and Contacts—is strictly Read-Only.</strong> We cannot modify, delete, or add any data to your Google Account.</p>
+        </div>
+
+        <h3>Purpose of Access</h3>
+        <ul>
+            <li><strong>Contacts Access:</strong> The Service requires read-only access to your Google Contacts to allow you to download and export your contacts.</li>
+            <li><strong>Email and Profile Access:</strong> This is used for user authentication, personalization, and to identify you as the Service user.</li>
+        </ul>
+
+        <h3>Data Storage and Retention</h3>
+
+        <div class="important">
+            <p><strong>We do not save your personal contact list or any contact details on our servers.</strong></p>
+        </div>
+
+        <p>We only store an <strong>authentication token</strong> provided by Google. This token is a secure, unique key that allows our Service to make authorized, read-only requests to Google's APIs on your behalf without us ever needing to store or see your actual Google password.</p>
+
+        <ul>
+            <li><strong>The Token:</strong> The token is <strong>encrypted using AES encryption</strong> and stored securely in our database. It is solely used to contact Google to access the explicitly permitted data points mentioned above.</li>
+        </ul>
+
+        <h2>2. Your Control and Data Revocation</h2>
+
+        <h3>Revocation of Access</h3>
+
+        <p>You have the right to <strong>revoke our access</strong> to your Google Account data at any time.</p>
+
+        <ul>
+            <li>You can disconnect your Google Account from our Service by revoking your access token through our API, or;</li>
+            <li>You can manage and revoke the permissions granted to <strong>Google Contacts Downloader</strong> by visiting your <strong>Google Security settings</strong> page at <a href="https://myaccount.google.com/permissions" target="_blank">https://myaccount.google.com/permissions</a>.</li>
+        </ul>
+
+        <p>Revoking access will immediately disable the Service's ability to access your Google Contacts, email, or profile information. If you revoke access, we will immediately delete the stored Google authentication token.</p>
+
+        <h2>3. Data Security</h2>
+
+        <p>We implement appropriate technical and organizational security measures to protect your data:</p>
+        <ul>
+            <li>All authentication tokens are encrypted using AES encryption before storage</li>
+            <li>Our database uses WAL mode for improved concurrent access and data integrity</li>
+            <li>We use HTTPS for all communications</li>
+            <li>Access tokens automatically expire and are cleaned up</li>
+        </ul>
+
+        <h2>4. Data Sharing</h2>
+
+        <p>We do not sell, trade, or otherwise transfer your personal information to third parties. The only data sharing that occurs is:</p>
+        <ul>
+            <li>Communication with Google's APIs using your encrypted authentication token to fetch your contacts</li>
+            <li>No third-party analytics or tracking services are used</li>
+        </ul>
+
+        <h2>5. Children's Privacy</h2>
+
+        <p>Our Service is not intended for use by anyone under the age of 13. We do not knowingly collect personally identifiable information from children under 13. If we become aware that we have collected Personal Data from a child under age 13 without verification of parental consent, we will take steps to remove that information from our servers.</p>
+
+        <h1>TERMS OF SERVICE</h1>
+
+        <p>By using Google Contacts Downloader (the "Service"), you agree to be bound by these Terms of Service. These terms create a legally binding agreement between you and the Service provider.</p>
+
+        <h2>1. Acceptance and Agreement</h2>
+        <p>Your use of this Service constitutes acceptance of these Terms of Service. If you do not agree to these terms, please do not use the Service.</p>
+
+        <h2>2. Permitted Use</h2>
+        <p>You may use this Service to:</p>
+        <ul>
+            <li>Authenticate with your Google Account to access your contacts</li>
+            <li>Download and export your personal Google Contacts data</li>
+            <li>Use the Service for personal, educational, or legitimate business purposes</li>
+        </ul>
+
+        <h2>3. Prohibited Activities</h2>
+        <p>You agree NOT to:</p>
+        <ul>
+            <li>Use the Service for any illegal or unauthorized purposes</li>
+            <li>Attempt to gain unauthorized access to other users' data</li>
+            <li>Reverse engineer, decompile, or attempt to extract source code</li>
+            <li>Use the Service to violate any applicable laws or regulations</li>
+            <li>Share your access tokens with unauthorized third parties</li>
+            <li>Use the Service in a way that could damage, disable, or impair the Service</li>
+        </ul>
+
+        <h2>4. Intellectual Property Rights</h2>
+        <p>The Service, including all code, design, content, and documentation, is protected by intellectual property laws. You are granted a limited, non-exclusive, non-transferable license to use the Service for its intended purposes only.</p>
+
+        <h2>5. Google API Terms Compliance</h2>
+        <div class="important">
+            <p>This Service integrates with Google APIs and is subject to Google's Terms of Service for API usage:</p>
+        </div>
+        <ul>
+            <li>Google reserves the right to monitor API usage to ensure quality and compliance</li>
+            <li>Your data remains portable - you can export it at any time</li>
+            <li>The Service must comply with Google's data handling requirements</li>
+            <li>Google may audit the Service to verify compliance with their terms</li>
+        </ul>
+
+        <h2>6. Limitation of Liability</h2>
+        <p>The Service is provided "as is" without warranties of any kind. To the maximum extent permitted by law:</p>
+        <ul>
+            <li>We are not liable for any direct, indirect, or consequential damages</li>
+            <li>We do not guarantee uninterrupted or error-free service</li>
+            <li>Your use of the Service is at your own risk</li>
+            <li>We are not responsible for data loss due to Google API changes or service interruptions</li>
+        </ul>
+
+        <h2>7. User Responsibilities</h2>
+        <p>You are responsible for:</p>
+        <ul>
+            <li>Maintaining the confidentiality of your access tokens</li>
+            <li>Using the Service in accordance with these terms</li>
+            <li>Complying with Google's Terms of Service</li>
+            <li>Any consequences of misuse of the Service</li>
+        </ul>
+
+        <h2>8. Service Availability</h2>
+        <p>We strive to maintain service availability but do not guarantee:</p>
+        <ul>
+            <li>Continuous, uninterrupted access to the Service</li>
+            <li>Compatibility with future Google API changes</li>
+            <li>Support for all devices or browsers</li>
+        </ul>
+
+        <h2>9. Termination</h2>
+        <p>You may terminate your use of the Service at any time by revoking your Google API access. We may suspend or terminate access for violations of these terms.</p>
+
+        <h1>GENERAL</h1>
+
+        <h2>1. Changes to This Privacy Policy and Terms</h2>
+
+        <p>We may update our Privacy Policy and Terms of Service from time to time. We will notify you of any changes by posting the updated version on this page and updating the "Last Updated" date at the top of this document. You are advised to review this page periodically for any changes.</p>
+
+        <h2>2. Contact Us</h2>
+
+        <p>If you have any questions about this Privacy Policy or Terms of Service, please contact us through our GitHub repository or by using the contact information provided with this service.</p>
+
+        <div class="footer">
+            <p>Google Contacts Downloader - A secure, read-only service for downloading your Google Contacts</p>
+        </div>
+    </div>
+</body>
+</html>
