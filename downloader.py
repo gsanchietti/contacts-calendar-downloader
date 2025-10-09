@@ -27,6 +27,9 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from icalendar import Calendar, Event
+from datetime import datetime, timezone
+import dateutil.parser
 
 # Allow HTTP for local development (disable HTTPS requirement)
 # WARNING: Only use this for local development, never in production!
@@ -83,10 +86,11 @@ ENCRYPTION_WARNINGS_TOTAL = Counter(
     'Number of times default encryption key warning was shown'
 )
 
-# Default OAuth scopes: read-only access to contacts + user profile for email identification
+# Default OAuth scopes: read-only access to contacts, calendar + user profile for email identification
 # Note: openid is automatically added when using userinfo.email scope
 DEFAULT_SCOPES = [
     "https://www.googleapis.com/auth/contacts.readonly",
+    "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/userinfo.email",
     "openid"
 ]
@@ -670,6 +674,105 @@ except Exception as e:
     print("Will attempt to initialize on first request")
 
 
+def fetch_google_calendar(credentials) -> str:
+    """Fetch Google Calendar events and return as ICS format"""
+    try:
+        service = build('calendar', 'v3', credentials=credentials)
+        
+        # Get primary calendar events (future events only)
+        now = datetime.utcnow().isoformat() + 'Z'  # 'Z' indicates UTC time
+        events_result = service.events().list(
+            calendarId='primary',
+            timeMin=now,
+            maxResults=1000,
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+        
+        events = events_result.get('items', [])
+        
+        # Create ICS calendar
+        cal = Calendar()
+        cal.add('prodid', '-//Google Contacts Downloader//Calendar Export//EN')
+        cal.add('version', '2.0')
+        cal.add('calscale', 'GREGORIAN')
+        cal.add('method', 'PUBLISH')
+        cal.add('x-wr-calname', 'Google Calendar Export')
+        cal.add('x-wr-timezone', 'UTC')
+        
+        for event_data in events:
+            event = Event()
+            
+            # Required fields
+            event.add('uid', event_data.get('id', ''))
+            event.add('summary', event_data.get('summary', 'No Title'))
+            
+            # Start time
+            start = event_data.get('start', {})
+            if 'dateTime' in start:
+                start_dt = dateutil.parser.parse(start['dateTime'])
+                event.add('dtstart', start_dt)
+            elif 'date' in start:
+                # All-day event
+                start_date = dateutil.parser.parse(start['date']).date()
+                event.add('dtstart', start_date)
+                event.add('x-microsoft-cdo-alldayevent', 'TRUE')
+            
+            # End time
+            end = event_data.get('end', {})
+            if 'dateTime' in end:
+                end_dt = dateutil.parser.parse(end['dateTime'])
+                event.add('dtend', end_dt)
+            elif 'date' in end:
+                # All-day event
+                end_date = dateutil.parser.parse(end['date']).date()
+                event.add('dtend', end_date)
+            
+            # Optional fields
+            if 'description' in event_data:
+                event.add('description', event_data['description'])
+            
+            if 'location' in event_data:
+                event.add('location', event_data['location'])
+            
+            if 'created' in event_data:
+                created_dt = dateutil.parser.parse(event_data['created'])
+                event.add('created', created_dt)
+            
+            if 'updated' in event_data:
+                updated_dt = dateutil.parser.parse(event_data['updated'])
+                event.add('last-modified', updated_dt)
+            
+            # Status
+            status = event_data.get('status', 'confirmed').upper()
+            event.add('status', status)
+            
+            # Transparency
+            transparency = event_data.get('transparency', 'opaque').upper()
+            event.add('transp', transparency)
+            
+            # Organizer
+            organizer = event_data.get('organizer', {})
+            if 'email' in organizer:
+                event.add('organizer', f"mailto:{organizer['email']}")
+            
+            # Attendees
+            attendees = event_data.get('attendees', [])
+            for attendee in attendees:
+                if 'email' in attendee:
+                    attendee_str = f"mailto:{attendee['email']}"
+                    if 'displayName' in attendee:
+                        attendee_str = f"{attendee['displayName']} <{attendee['email']}>"
+                    event.add('attendee', attendee_str)
+            
+            cal.add_component(event)
+        
+        return cal.to_ical().decode('utf-8')
+        
+    except Exception as e:
+        raise RuntimeError(f"Failed to fetch calendar: {str(e)}")
+
+
 @app.route('/')
 def index():
     """Home page with service overview and quick start guide."""
@@ -836,7 +939,7 @@ def oauth2callback():
                 "user_email": user_email,
                 "access_token": access_token,
                 "token_saved_to": "database",
-                "next_steps": "Use the access_token in Authorization header: 'Bearer <token>' to call /download"
+                "next_steps": "Use the access_token in Authorization header: 'Bearer <token>' to call /download/contacts"
             })
         else:
             # Browser request - return HTML page
@@ -898,8 +1001,8 @@ def oauth2callback():
                                  troubleshooting=troubleshooting), 400
 
 
-@app.route('/download')
-def download():
+@app.route('/download/contacts')
+def download_contacts_endpoint():
     """Download contacts for the authenticated user in specified format."""
     config = get_config()
     format_param = request.args.get('format', 'csv').lower()
@@ -910,7 +1013,7 @@ def download():
         return jsonify({
             "error": "Authentication required",
             "solution": "Include 'Authorization: Bearer <access_token>' header",
-            "example": "curl -H 'Authorization: Bearer your_access_token' http://localhost:5000/download?format=json"
+            "example": "curl -H 'Authorization: Bearer your_access_token' http://localhost:5000/download/contacts?format=json"
         }), 401
 
     if format_param not in ['csv', 'json']:
@@ -968,6 +1071,89 @@ def download():
     except Exception as e:
         DOWNLOADS_TOTAL.labels(format=format_param, status='error').inc()
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/download/calendar')
+def download_calendar():
+    """Download user's Google Calendar in ICS format"""
+    HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_calendar", status_code="200").inc()
+    
+    config = get_config()
+    
+    # Authenticate user
+    user_email = authenticate_request()
+    if not user_email:
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_calendar", status_code="401").inc()
+        return jsonify({
+            "error": "Authentication required",
+            "troubleshooting": {
+                "details": "Missing or invalid Authorization header",
+                "error_type": "authentication_error", 
+                "solution": "Provide valid Bearer token in Authorization header"
+            }
+        }), 401
+
+    try:
+        # Load user credentials
+        credentials = load_user_credentials(config, user_email)
+        if not credentials:
+            return jsonify({
+                "error": "User not authenticated with Google",
+                "troubleshooting": {
+                    "details": f"No stored credentials found for user {user_email}",
+                    "error_type": "no_credentials",
+                    "solution": "Complete OAuth flow first by visiting /auth"
+                }
+            }), 400
+        
+        # Check if credentials have calendar scope
+        if not credentials.scopes or 'https://www.googleapis.com/auth/calendar.readonly' not in credentials.scopes:
+            return jsonify({
+                "error": "Missing calendar scope",
+                "troubleshooting": {
+                    "details": "Calendar access not granted during OAuth flow",
+                    "error_type": "missing_scope",
+                    "solution": "Re-authorize with calendar permissions by visiting /auth"
+                }
+            }), 400
+
+        # Refresh credentials if necessary
+        if credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+            # Save refreshed credentials
+            save_user_credentials(config, user_email, credentials)
+
+        # Fetch calendar data
+        calendar_ics = fetch_google_calendar(credentials)
+        
+        # Update metrics
+        DOWNLOADS_TOTAL.labels(format="ics", status="success").inc()
+        
+        # Return ICS file
+        response = Response(
+            calendar_ics,
+            mimetype='text/calendar',
+            headers={
+                'Content-Disposition': f'attachment; filename="calendar_{user_email.replace("@", "_")}.ics"',
+                'Content-Type': 'text/calendar; charset=utf-8'
+            }
+        )
+        
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_calendar", status_code="200").inc()
+        return response
+
+    except Exception as e:
+        DOWNLOADS_TOTAL.labels(format="ics", status="error").inc()
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_calendar", status_code="500").inc()
+        
+        return jsonify({
+            "error": "Calendar download failed",
+            "troubleshooting": {
+                "details": str(e),
+                "error_type": "calendar_fetch_error",
+                "solution": "Check calendar permissions and try again"
+            }
+        }), 500
 
 
 @app.route('/me')

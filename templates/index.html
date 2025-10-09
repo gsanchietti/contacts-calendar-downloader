@@ -214,13 +214,13 @@
                 <div class="feature-title">
                     <span class="feature-icon">📊</span>Multiple Export Formats
                 </div>
-                <p>Download your contacts in CSV or JSON format. Perfect for data analysis, backup, or migration purposes.</p>
+                <p>Download your contacts in CSV or JSON format and calendar events in ICS format. Perfect for data analysis, backup, or migration purposes.</p>
             </div>
         </div>
 
         <div class="security-notice">
             <span class="security-icon">🔒</span>
-            <strong>Read-Only Access:</strong> This service only requests read-only access to your Google Contacts. 
+            <strong>Read-Only Access:</strong> This service only requests read-only access to your Google Contacts and Calendar. 
             We cannot modify, delete, or add any data to your Google Account. Your privacy and data security are our top priorities.
         </div>
 
@@ -271,12 +271,17 @@
         </div>
         
         <div class="feature-card">
-            <div class="feature-title">📥 /download - Get Your Contacts</div>
+            <div class="feature-title">📥 /download/contacts - Get Your Contacts</div>
             <p>Download your contacts in CSV or JSON format using your Bearer token. Requires authentication.</p>
         </div>
         
         <div class="feature-card">
-            <div class="feature-title">👤 /me - User Information</div>
+            <div class="feature-title">� /download/calendar - Get Your Calendar</div>
+            <p>Download your calendar events in ICS format using your Bearer token. Requires authentication and calendar scope.</p>
+        </div>
+        
+        <div class="feature-card">
+            <div class="feature-title">�👤 /me - User Information</div>
             <p>Get information about your authenticated session and token status.</p>
         </div>
         

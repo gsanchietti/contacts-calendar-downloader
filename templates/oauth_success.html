@@ -182,12 +182,17 @@
             
             <div class="code-example">
 curl -H "Authorization: Bearer <span class="highlight">{{ access_token }}</span>" \<br>
-     "https://{{ host }}/download?format=json" > contacts.json
+     "https://{{ host }}/download/contacts?format=json" > contacts.json
             </div>
 
             <div class="code-example">
 curl -H "Authorization: Bearer <span class="highlight">{{ access_token }}</span>" \<br>
-     "https://{{ host }}/download?format=csv" > contacts.csv
+     "https://{{ host }}/download/contacts?format=csv" > contacts.csv
+            </div>
+
+            <div class="code-example">
+curl -H "Authorization: Bearer <span class="highlight">{{ access_token }}</span>" \<br>
+     "https://{{ host }}/download/calendar" > calendar.ics
             </div>
         </div>
 
