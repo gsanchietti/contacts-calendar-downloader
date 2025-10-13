@@ -198,6 +198,30 @@ For production deployment, configure your web server (nginx, Apache) to proxy re
 
 The service uses **SQLite database** with **AES encryption** to store:
 - **User OAuth credentials** (OAuth tokens for Google API access) - `token_data` column encrypted
+
+## Frontend assets (Tailwind CSS)
+
+This project uses Tailwind CSS for styling. Tailwind is built locally (or inside the container) using npm and the Tailwind CLI. The output CSS is written to `static/css/tailwind.css` and served by Flask.
+
+Local build (developer machine):
+
+```bash
+# install node deps
+npm ci
+
+# build the Tailwind CSS once
+npm run build:css
+
+# or watch for changes during development
+npm run watch:css
+```
+
+Container build (Docker):
+
+The Dockerfile (`Containerfile`) installs Node.js during the image build, runs `npm ci` and then `npm run build:css` to produce the `static/css/tailwind.css` file. No external CDN is used — everything is built into the image for production.
+
+If you change templates or the Tailwind config, rebuild the Docker image to regenerate CSS.
+
 - **Access tokens** (Bearer tokens for API authentication) - `access_token` column encrypted
 
 **Database file:** `google_contacts.db` (configurable via `GOOGLE_DATABASE` env var)
