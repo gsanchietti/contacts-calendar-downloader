@@ -1,18 +1,16 @@
-# Google Contacts Downloader
+# Contacts & Calendar Downloader
 
-A **multi-tenant** Flask-based HTTP service that allows multiple users to authentic3. **Enable required APIs**:
-   - Navigate to **APIs & Services → Library**.
-   - Search for "Google People API" and click **Enable**.
-   - Search for "Google Calendar API" and click **Enable**. and download their Google Contacts using the People API. Each user gets their own secure token storage, and the service can serve multiple clients simultaneously.
+A **multi-tenant** Flask-based HTTP service that allows multiple users to authenticate and download their contacts and calendar events from **Google** and **Microsoft** providers. Each user gets their own secure token storage, and the service can serve multiple clients simultaneously.
 
 ## Key Features
 
+✅ **Multi-Provider Support** - Google and Microsoft (Outlook/Office 365) authentication  
 ✅ **Multi-Tenant Architecture** - Multiple users can authenticate independently  
 ✅ **SQLite Database Storage** - Secure token and credentials storage in SQLite database  
-✅ **Google Contacts Export** - Download contacts in CSV or JSON format  
-✅ **Google Calendar Export** - Download calendar events in ICS format  
+✅ **Contacts Export** - Download contacts from Google People API or Microsoft Graph in CSV or JSON format  
+✅ **Calendar Export** - Download calendar events from Google Calendar or Microsoft Graph in ICS format  
 ✅ **Bearer Token Authentication** - JWT-like access token system for API security  
-✅ **Concurrent OAuth Flows** - Multiple users can authenticate simultaneously  
+✅ **Concurrent OAuth Flows** - Multiple users can authenticate simultaneously with different providers  
 ✅ **Auto Token Refresh** - Tokens are automatically refreshed when expired  
 ✅ **RESTful API** - Simple HTTP endpoints for all operations  
 ✅ **User-Friendly OAuth** - Browser-optimized OAuth flow with copy-paste token interface
@@ -21,14 +19,15 @@ A **multi-tenant** Flask-based HTTP service that allows multiple users to authen
 
 ## How it works
 
-The service authenticates each user with Google using OAuth 2.0, stores their credentials securely in an SQLite database, and provides REST endpoints to download contacts. Each user receives a Bearer access token for API authentication, and the service handles pagination automatically to retrieve all contacts.
+The service authenticates users with **Google** or **Microsoft** using OAuth 2.0, stores their credentials securely in an SQLite database, and provides REST endpoints to download contacts and calendar events. Each user receives a Bearer access token for API authentication, and the service handles pagination automatically to retrieve all data.
 
 **Architecture:**
-1. User visits `/auth` → Gets personalized OAuth URL
-2. User authorizes via Google → Service identifies user by email
-3. Credentials saved to SQLite database
-4. User receives Bearer access token
-5. User downloads contacts via `/download/contacts` with Authorization header
+1. User visits `/auth?provider=google` or `/auth?provider=microsoft` → Gets personalized OAuth URL
+2. User authorizes via chosen provider → Service identifies user by email
+3. Provider-specific credentials saved to SQLite database
+4. User receives Bearer access token (provider-aware)
+5. User downloads contacts/calendar via `/download/contacts` or `/download/calendar` with Authorization header
+6. Service automatically uses the correct provider based on the access token
 
 ## Quick Start
 
@@ -42,10 +41,13 @@ python downloader.py
 # 3. Visit the web interface (optional)
 # Open http://localhost:5000/ in your browser for a user-friendly interface
 
-# 4. In another terminal, get auth URL
-curl http://localhost:5000/auth | jq -r '.authorization_url'
+# 4. Get auth URL (choose your provider)
+# For Google:
+curl http://localhost:5000/auth?provider=google | jq -r '.authorization_url'
+# For Microsoft:
+curl http://localhost:5000/auth?provider=microsoft | jq -r '.authorization_url'
 
-# 5. Open the URL in a browser and authorize
+# 5. Open the URL in a browser and authorize with your chosen provider
 
 # 6. Download contacts using the access token from step 5
 curl -H "Authorization: Bearer <access_token>" "http://localhost:5000/download/contacts?format=json" > contacts.json
@@ -69,7 +71,7 @@ curl http://localhost:5000/privacy_policy
 curl http://localhost:8000/auth | jq -r '.authorization_url'
 # Opens URL, completes OAuth → gets access_token_1
 
-# Employee 2 authenticates simultaneously  
+# Employee 2 authenticates simultaneously
 curl http://localhost:8000/auth | jq -r '.authorization_url'
 # Opens URL, completes OAuth → gets access_token_2
 
@@ -88,7 +90,7 @@ curl http://localhost:8000/metrics | grep gcd_registered_users_total
 POST /oauth2callback → access_token_A
 
 # Customer B's app authenticates independently
-POST /oauth2callback → access_token_B  
+POST /oauth2callback → access_token_B
 
 # Each customer downloads only their own data
 curl -H "Authorization: Bearer $access_token_A" /download/contacts → Customer A's contacts
@@ -101,7 +103,122 @@ curl -H "Authorization: Bearer $access_token_B" /download/contacts → Customer 
 
 - Python 3.9 or newer
 - A Google Cloud project with the **Google People API** enabled
-- OAuth 2.0 client credentials (`credentials.json`)
+- OAuth 2.0 client credentials for Google and/or Microsoft (see setup below)
+
+Install the Python dependencies:
+
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+## Documentation
+
+📚 **Complete Documentation:**
+
+- **[API Reference](docs/api.md)** - Comprehensive API documentation, endpoints, authentication, and data formats
+- **[Provider Setup](docs/providers.md)** - Step-by-step Google Cloud and Microsoft Azure configuration
+- **[Deployment Guide](docs/deployment.md)** - Production deployment, security, monitoring, and operations
+- **[Advanced Configuration](docs/advanced.md)** - Environment variables, database details, and technical implementation
+
+## Running the Service
+
+### Starting the service
+
+```bash
+# Set environment variables
+export GOOGLE_CREDENTIALS=/path/to/credentials.json
+
+# Run the service (runs on http://localhost:5000 by default)
+python downloader.py
+```
+
+**Note for local development:** The service automatically allows HTTP connections for local development by setting `OAUTHLIB_INSECURE_TRANSPORT=1`. This is necessary because Google's OAuth library requires HTTPS by default. **Never use HTTP in production** - always configure HTTPS with proper SSL/TLS certificates.
+
+For production deployment, configure your web server (nginx, Apache) to proxy requests to the Flask service with HTTPS.
+
+### Environment Variables
+
+The service supports the following environment variables for configuration:
+
+#### Core Configuration
+- `GOOGLE_CREDENTIALS`: Path to Google OAuth credentials.json file (default: `credentials/google.json`)
+- `MICROSOFT_CREDENTIALS`: Path to Microsoft OAuth credentials.json file (default: `credentials/microsoft.json`)
+- `DATABASE`: Path to SQLite database file (default: `downloader.db`)
+- `ENCRYPTION_KEY`: AES-256 encryption key for database security (default: `"secret"` with warning - **REQUIRED for production**)
+
+#### Server Configuration
+- `HOST`: Server bind address for redirect URI generation (default: `localhost`)
+- `PORT`: Server port for redirect URI generation (default: `5000`)
+- `PROTOCOL`: Protocol for redirect URI generation - `http` or `https` (default: `http` for local, `https` for production)
+- `FLASK_SECRET_KEY`: Flask session secret key (auto-generated if not set)
+
+#### OAuth Configuration
+- `GOOGLE_OAUTH_REDIRECT_URI`: Override the Google OAuth redirect URI specifically (optional - useful for production deployments)
+- `MICROSOFT_OAUTH_REDIRECT_URI`: Override the Microsoft OAuth redirect URI specifically (optional - useful for production deployments)
+
+#### API Configuration
+- `PERSON_FIELDS`: Comma-separated list of Google People API fields to request (default: `names,emailAddresses,phoneNumbers,addresses,organizations,birthdays`)
+- `PAGE_SIZE`: Number of contacts per API request, max 1000 (default: `1000`)
+
+**Note:** The service automatically sets `OAUTHLIB_INSECURE_TRANSPORT=0` for security. This is hardcoded and not user-configurable.
+
+## Files Reference
+
+This repository includes several supporting files:
+
+- **`compose.yml`** - Podman Compose configuration with Traefik using static file configuration
+- **`Containerfile`** - Production container image with Gunicorn WSGI
+- **`deploy.sh`** - Automated deployment script with Traefik config generation
+- **`traefik.yml`** - Traefik static configuration file (no Docker socket dependency)
+- **`traefik-dynamic.yml`** - Dynamic Traefik routing rules (generated from template)
+- **`generate-traefik-config.sh`** - Script to generate Traefik config with environment variables
+- **`.env.example`** - Environment configuration template
+- **`requirements.txt`** - Python dependencies including Gunicorn and monitoring
+- **`.gitignore`** - Excludes sensitive files from version control
+
+### Development vs Production
+
+**Development:**
+```bash
+python downloader.py  # Development server on :5000
+```
+
+**Production:**
+```bash
+./deploy.sh  # Podman Compose with Gunicorn on :8000/8443
+```
+
+## Security & Compliance
+
+🔐 **Security Features:**
+- AES-256 encryption for all stored tokens and credentials
+- Bearer token authentication with configurable expiry
+- HTTPS enforcement in production
+- Rate limiting and request validation
+- Comprehensive audit logging
+
+📋 **Compliance:**
+- Built-in privacy policy and terms of service
+- GDPR-compliant data handling
+- OAuth 2.0 security best practices
+- No data retention beyond authentication tokens
+
+## Contributing
+
+Contributions are welcome! Please see the [API documentation](docs/api.md) for technical details and the [deployment guide](docs/deployment.md) for development setup.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Prerequisites
+
+- Python 3.9 or newer
+- A Google Cloud project with the **Google People API** enabled
+- OAuth 2.0 client credentials for Google and/or Microsoft (see setup below)
 
 Install the Python dependencies:
 
@@ -166,6 +283,45 @@ pip install -r requirements.txt
    - Enter full Google account emails (must be valid) and click Save.
    - Only listed test users can complete OAuth while the app is in Testing; others will see an unverified/access error.
 
+## Microsoft Azure / Microsoft 365 setup (optional)
+
+The application can also authenticate Microsoft (Outlook / Microsoft 365) accounts using Microsoft Graph. To enable Microsoft support, register an app in the Azure Portal and provide the credentials to the service.
+
+1. Visit the [Azure Portal](https://portal.azure.com/) and open **Azure Active Directory** → **App registrations** → **New registration**.
+2. Give your app a name (e.g., "Contacts Downloader - Microsoft") and choose the supported account types (single-tenant or multitenant depending on your needs).
+3. After registration, go to **Authentication** and add a platform: **Web**. Add the redirect URI used by the application (e.g., `https://your-domain.com/oauth2callback` or `http://localhost:5000/oauth2callback`).
+4. Under **Certificates & secrets**, create a new **Client secret** and copy it. You'll need the Client ID and Client Secret.
+5. Under **API permissions**, add Microsoft Graph permissions:
+   - Delegated: `User.Read` (for user info)
+   - Delegated: `Contacts.Read` (for contacts export)
+   - Delegated: `Calendars.Read` (for calendar export)
+   - Add `offline_access` to allow refresh tokens
+6. If your tenant requires admin consent for these permissions, grant admin consent or add test users as needed.
+
+Configuration in this project:
+
+- Place a JSON file with Microsoft credentials at `credentials/microsoft.json` with the following shape:
+
+```json
+{
+  "client_id": "<your-client-id>",
+  "client_secret": "<your-client-secret>",
+  "tenant": "common"
+}
+```
+
+- Install additional Python deps:
+
+```bash
+pip install msal requests
+```
+
+- Start the service and use `GET /auth?provider=microsoft` to begin a Microsoft OAuth flow.
+
+Notes:
+- The Microsoft provider uses Microsoft Graph endpoints and issues access/refresh tokens which are stored encrypted in the database just like Google credentials.
+- The flow is web-based and behaves similarly to Google: the user will receive an access token on the success page to use with API endpoints.
+
 
 ## Running the Service
 
@@ -174,7 +330,6 @@ pip install -r requirements.txt
 ```bash
 # Set environment variables
 export GOOGLE_CREDENTIALS=/path/to/credentials.json
-export GOOGLE_TOKEN=/path/to/token.pickle
 
 # Run the service (runs on http://localhost:5000 by default)
 python downloader.py
@@ -182,13 +337,14 @@ python downloader.py
 
 **Note for local development:** The service automatically allows HTTP connections for local development by setting `OAUTHLIB_INSECURE_TRANSPORT=1`. This is necessary because Google's OAuth library requires HTTPS by default. **Never use HTTP in production** - always configure HTTPS with proper SSL/TLS certificates.
 
-For production deployment, configure your web server (nginx, Apache) to proxy requests to the Flask service with HTTPS.
+For production deployment, configure your web server (nginx, Apqache) to proxy requests to the Flask service with HTTPS.
 
 ### Environment Variables
 
-- `GOOGLE_CREDENTIALS`: Path to credentials.json (default: credentials.json)
-- `GOOGLE_DATABASE`: Path to SQLite database file (default: google_contacts.db)
-- `GOOGLE_ENCRYPTION_KEY`: Encryption key for database security (default: "secret" with warning)
+- `GOOGLE_CREDENTIALS`: Path to credentials.json (default: credentials/google.json)
+- `MICROSOFT_CREDENTIALS`: Path to Microsoft credentials.json (default: credentials/microsoft.json)
+- `DATABASE`: Path to SQLite database file (default: google_contacts.db)
+- `ENCRYPTION_KEY`: Encryption key for database security (default: "secret" with warning)
 - `FLASK_SECRET_KEY`: Flask session secret (auto-generated if not set)
 - `PERSON_FIELDS`: Comma-separated list of person fields to request
 - `PAGE_SIZE`: Number of contacts per API request (max 1000)
@@ -203,8 +359,8 @@ The service uses **SQLite database** with **AES encryption** to store:
 - **User OAuth credentials** (OAuth tokens for Google API access) - `token_data` column encrypted
 - **Access tokens** (Bearer tokens for API authentication) - `access_token` column encrypted
 
-**Database file:** `google_contacts.db` (configurable via `GOOGLE_DATABASE` env var)
-**Encryption:** AES-256 via Fernet (configurable via `GOOGLE_ENCRYPTION_KEY` env var)
+**Database file:** `downloader.db` (configurable via `DATABASE` env var)
+**Encryption:** AES-256 via Fernet (configurable via `ENCRYPTION_KEY` env var)
 
 #### Encryption Security
 
@@ -220,7 +376,7 @@ The service uses **SQLite database** with **AES encryption** to store:
 **Production Security:**
 ```bash
 # Set a strong encryption key (required for production)
-export GOOGLE_ENCRYPTION_KEY="your-very-secure-random-key-here"
+export ENCRYPTION_KEY="your-very-secure-random-key-here"
 
 # Start the service - no warnings will appear
 python downloader.py
@@ -230,7 +386,7 @@ python downloader.py
 ```bash
 # If no key is set, warnings will be displayed
 python downloader.py
-# ⚠️  WARNING: GOOGLE_ENCRYPTION_KEY not set, using default 'secret' key.
+# ⚠️  WARNING: ENCRYPTION_KEY not set, using default 'secret' key.
 # ⚠️  WARNING: This is NOT secure for production use!
 ```
 
@@ -349,28 +505,6 @@ curl -H "Authorization: Bearer your_access_token" "http://localhost:5000/downloa
 - Import events into other calendar applications (Outlook, Apple Calendar, etc.)
 - Integrate with calendar management tools
 - Create calendar snapshots for record keeping
-
----
-
-#### GET /me
-Get information about the currently authenticated user. **Requires authentication.**
-
-**Headers:**
-- `Authorization: Bearer <access_token>` (required)
-
-**Example:**
-```bash
-curl -H "Authorization: Bearer your_access_token" http://localhost:5000/me
-```
-
-**Response:**
-```json
-{
-  "user_email": "john@gmail.com",
-  "authenticated": true,
-  "token_file": "token_a1b2c3d4.pickle"
-}
-```
 
 ---
 
@@ -725,7 +859,7 @@ podman run --rm --name contacts-service \
   -v ./credentials.json:/app/credentials.json:ro,z \
   -e GOOGLE_CREDENTIALS=/app/credentials.json \
   -e DATABASE_PATH=/app/data/credentials.db \
-  -e GOOGLE_ENCRYPTION_KEY="$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" \
+  -e ENCRYPTION_KEY="$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" \
   google-contacts-downloader
 ```
 

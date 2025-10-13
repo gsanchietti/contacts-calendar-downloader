@@ -1,175 +1,72 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Authorization Successful - Google Contacts Downloader</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f9f9f9;
-        }
-        .container {
-            background-color: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .success-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .success-icon {
-            color: #34a853;
-            font-size: 4em;
-            margin-bottom: 10px;
-        }
-        h1 {
-            color: #1a73e8;
-            margin-bottom: 10px;
-        }
-        .user-info {
-            background-color: #e8f0fe;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            border-left: 4px solid #1a73e8;
-        }
-        .token-section {
-            background-color: #fef7e0;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-            border-left: 4px solid #f9ab00;
-        }
-        .token-container {
-            display: flex;
-            align-items: center;
-            margin: 15px 0;
-        }
-        .token-input {
-            flex: 1;
-            font-family: 'Courier New', monospace;
-            background-color: #f8f9fa;
-            border: 1px solid #dadce0;
-            padding: 12px;
-            border-radius: 4px;
-            font-size: 14px;
-            word-break: break-all;
-            margin-right: 10px;
-        }
-        .copy-btn {
-            background-color: #1a73e8;
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            min-width: 80px;
-        }
-        .copy-btn:hover {
-            background-color: #1557b0;
-        }
-        .copy-btn:active {
-            background-color: #0f4c81;
-        }
-        .copy-btn.copied {
-            background-color: #34a853;
-        }
-        .instructions {
-            background-color: #e1f5fe;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-            border-left: 4px solid #03a9f4;
-        }
-        .code-example {
-            background-color: #263238;
-            color: #ffffff;
-            padding: 15px;
-            border-radius: 6px;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            overflow-x: auto;
-            margin: 10px 0;
-        }
-        .highlight {
-            color: #81c784;
-        }
-        .next-steps {
-            margin-top: 30px;
-        }
-        .step {
-            margin: 15px 0;
-            padding-left: 30px;
-            position: relative;
-        }
-        .step::before {
-            content: counter(step-counter);
-            counter-increment: step-counter;
-            position: absolute;
-            left: 0;
-            top: 0;
-            background-color: #1a73e8;
-            color: white;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        .next-steps {
-            counter-reset: step-counter;
-        }
-        .footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
-            text-align: center;
-            color: #666;
-        }
-        .warning {
-            background-color: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        .warning-icon {
-            color: #f57c00;
-            margin-right: 8px;
-        }
-    </style>
-</head>
-<body>
+{% extends 'layout.html' %}
+
+{% block title %}Authorization Successful - Google Contacts Downloader{% endblock %}
+
+{% block head %}
+<style>
+    .success-header { text-align: center; margin-bottom: 30px; }
+    .success-icon { color: #34a853; font-size: 4em; margin-bottom: 10px; }
+    .user-info { background-color: #e8f0fe; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #1a73e8; }
+    .token-section { background-color: #fef7e0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f9ab00; }
+    .token-input { width: calc(100% - 90px); padding: 8px; }
+    .copy-btn { padding: 8px 12px; margin-left: 8px; }
+    .code-example { background:#f1f3f4;padding:12px;border-radius:6px;margin:10px 0;font-family:monospace;white-space:pre-wrap; }
+    .highlight { background:#fff3cd; padding:2px 6px; border-radius:4px; }
+    .warning { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }
+    .warning-icon { color: #f57c00; margin-right: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
     <div class="container">
         <div class="success-header">
             <div class="success-icon">✅</div>
             <h1>Authorization Successful!</h1>
-            <p>Your Google account has been successfully connected to Google Contacts Downloader.</p>
+            <p>Your account has been successfully connected to the Contacts & Calendar Downloader.</p>
         </div>
 
         <div class="user-info">
             <strong>Authorized Account:</strong> {{ user_email }}
+            <div style="margin-top:8px;color:#666;font-size:0.9em;">Provider: {{ provider|default('google') }}</div>
         </div>
 
         <div class="warning">
             <span class="warning-icon">⚠️</span>
-            <strong>Important:</strong> Keep your access token secure and don't share it with others. It provides access to your Google Contacts.
+            <strong>Important:</strong> Keep your access token secure and don't share it with others. It provides access to your Contacts and Calendars.
+        </div>
+
+        <div class="token-section" style="background-color: #f3e5f5; border-left-color: #9c27b0;">
+            <h3>🔗 Permanent Export URLs</h3>
+            <p>These URLs work forever without authentication - keep them secret!</p>
+
+            <div style="margin: 15px 0;">
+                <strong>📄 Contacts CSV:</strong><br>
+                <div class="token-container">
+                    <input type="text" class="token-input" id="contactsUrl" value="{{ base_url }}/export/contacts/{{ export_token }}.csv" readonly>
+                    <button class="copy-btn" onclick="copyUrl('contactsUrl')">Copy</button>
+                </div>
+            </div>
+
+            <div style="margin: 15px 0;">
+                <strong>📅 Calendar ICS:</strong><br>
+                <div class="token-container">
+                    <input type="text" class="token-input" id="calendarUrl" value="{{ base_url }}/export/calendar/{{ export_token }}.ics" readonly>
+                    <button class="copy-btn" onclick="copyUrl('calendarUrl')">Copy</button>
+                </div>
+            </div>
+
+            <div style="margin: 15px 0;">
+                <strong>⚙️ Data Management:</strong><br>
+                <div class="token-container">
+                    <input type="text" class="token-input" id="manageUrl" value="{{ base_url }}/manage/{{ export_token }}" readonly>
+                    <button class="copy-btn" onclick="copyUrl('manageUrl')">Copy</button>
+                </div>
+            </div>
         </div>
 
         <div class="token-section">
             <h3>Your Access Token</h3>
             <p>Copy this token to use with the API. You'll need it for all download requests:</p>
-            
             <div class="token-container">
                 <input type="text" class="token-input" id="accessToken" value="{{ access_token }}" readonly>
                 <button class="copy-btn" onclick="copyToken()">Copy</button>
@@ -179,88 +76,25 @@
         <div class="instructions">
             <h3>How to Use Your Token</h3>
             <p>Use your access token in the <code>Authorization</code> header for API requests:</p>
-            
-            <div class="code-example">
-curl -H "Authorization: Bearer <span class="highlight">{{ access_token }}</span>" \<br>
-     "https://{{ host }}/download/contacts?format=json" > contacts.json
-            </div>
-
-            <div class="code-example">
-curl -H "Authorization: Bearer <span class="highlight">{{ access_token }}</span>" \<br>
-     "https://{{ host }}/download/contacts?format=csv" > contacts.csv
-            </div>
-
-            <div class="code-example">
-curl -H "Authorization: Bearer <span class="highlight">{{ access_token }}</span>" \<br>
-     "https://{{ host }}/download/calendar" > calendar.ics
-            </div>
-        </div>
-
-        <div class="next-steps">
-            <h3>Next Steps</h3>
-            
-            <div class="step">
-                <strong>Download your contacts</strong><br>
-                Use the curl commands above or integrate with your application
-            </div>
-            
-            <div class="step">
-                <strong>Check your user info</strong><br>
-                <code>curl -H "Authorization: Bearer {{ access_token }}" http://{{ host }}/me</code>
-            </div>
-            
-            <div class="step">
-                <strong>View available formats</strong><br>
-                Choose between <code>format=json</code> or <code>format=csv</code> for downloads
-            </div>
-            
-            <div class="step">
-                <strong>Revoke access when done</strong><br>
-                <code>curl -X POST -H "Authorization: Bearer {{ access_token }}" http://{{ host }}/token/revoke</code>
-            </div>
-        </div>
-
-        <div class="footer">
-            <p>Google Contacts Downloader - Secure, read-only access to your Google Contacts</p>
-            <p><a href="/privacy_policy" target="_blank">Privacy Policy & Terms of Service</a></p>
+            <div class="code-example">curl -H "Authorization: Bearer {{ access_token }}" \
+"{{base_url}}/download/contacts?format=json" &gt; contacts.json</div>
+            <div class="code-example">curl -H "Authorization: Bearer {{ access_token }}" \
+"{{base_url}}/download/contacts?format=csv" &gt; contacts.csv</div>
+            <div class="code-example">curl -H "Authorization: Bearer {{ access_token }}" \
+"{{base_url}}/download/calendar" &gt; calendar.ics</div>
         </div>
     </div>
+{% endblock %}
 
-    <script>
-        function copyToken() {
-            const tokenInput = document.getElementById('accessToken');
-            const copyBtn = document.querySelector('.copy-btn');
-            
-            // Select and copy the token
-            tokenInput.select();
-            tokenInput.setSelectionRange(0, 99999); // For mobile devices
-            
-            try {
-                document.execCommand('copy');
-                
-                // Visual feedback
-                copyBtn.textContent = 'Copied!';
-                copyBtn.classList.add('copied');
-                
-                // Reset button after 2 seconds
-                setTimeout(() => {
-                    copyBtn.textContent = 'Copy';
-                    copyBtn.classList.remove('copied');
-                }, 2000);
-                
-            } catch (err) {
-                console.error('Failed to copy token:', err);
-                copyBtn.textContent = 'Failed';
-                setTimeout(() => {
-                    copyBtn.textContent = 'Copy';
-                }, 2000);
-            }
-        }
-        
-        // Auto-select token on click
-        document.getElementById('accessToken').addEventListener('click', function() {
-            this.select();
-        });
-    </script>
-</body>
-</html>
+{% block scripts %}
+<script>
+    function copyToken() {
+        const tokenInput = document.getElementById('accessToken');
+        const copyBtn = document.querySelector('.copy-btn');
+        tokenInput.select(); tokenInput.setSelectionRange(0,99999);
+        try { document.execCommand('copy'); copyBtn.textContent='Copied!'; setTimeout(()=>{copyBtn.textContent='Copy';},2000);} catch(e){copyBtn.textContent='Failed';setTimeout(()=>{copyBtn.textContent='Copy';},2000);}    
+    }
+    function copyUrl(inputId){ const urlInput=document.getElementById(inputId); const copyBtn=urlInput.parentNode.querySelector('.copy-btn'); urlInput.select(); urlInput.setSelectionRange(0,99999); try{ document.execCommand('copy'); copyBtn.textContent='Copied!'; setTimeout(()=>{copyBtn.textContent='Copy';},2000);}catch(e){copyBtn.textContent='Failed';setTimeout(()=>{copyBtn.textContent='Copy';},2000);} }
+    document.getElementById('accessToken')?.addEventListener('click', function(){ this.select(); });
+</script>
+{% endblock %}

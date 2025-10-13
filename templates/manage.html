@@ -1,0 +1,340 @@
+{% extends 'layout.html' %}
+
+{% block title %}Manage Export Token - {{ user_email }}{% endblock %}
+
+{% block head %}
+<style>
+  .manage-container { max-width: 900px; margin: 30px auto; padding: 0 15px; }
+  .page-header { text-align: center; margin-bottom: 40px; }
+  .page-header h1 { color: #1a73e8; margin-bottom: 10px; }
+  .page-header .subtitle { color: #666; font-size: 0.95em; }
+  
+  .info-section {
+    background: #f8f9fa;
+    border-left: 4px solid #1a73e8;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 8px;
+  }
+  
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  
+  .info-row:last-child { border-bottom: none; }
+  .info-label { font-weight: 600; color: #333; }
+  .info-value { color: #666; font-family: monospace; word-break: break-all; }
+  
+  .export-section {
+    background: #e8f0fe;
+    border-left: 4px solid #1a73e8;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 8px;
+  }
+  
+  .export-section h3 {
+    margin-top: 0;
+    color: #1a73e8;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .url-item {
+    background: white;
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 6px;
+    border: 1px solid #d0d0d0;
+  }
+  
+  .url-label {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .url-input-group {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .url-input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9em;
+    background: #f9f9f9;
+  }
+  
+  .copy-btn {
+    padding: 10px 20px;
+    background: #1a73e8;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.3s;
+  }
+  
+  .copy-btn:hover { background: #1557b0; }
+  .copy-btn.copied { background: #34a853; }
+  
+  .tokens-section {
+    background: #fef7e0;
+    border-left: 4px solid #f9ab00;
+    padding: 20px;
+    margin: 25px 0;
+    border-radius: 8px;
+  }
+  
+  .tokens-section h3 {
+    margin-top: 0;
+    color: #f9ab00;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .token-item {
+    background: white;
+    padding: 12px 15px;
+    margin: 10px 0;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+    font-family: monospace;
+    font-size: 0.9em;
+  }
+  
+  .token-prefix {
+    color: #1a73e8;
+    font-weight: 600;
+  }
+  
+  .token-date {
+    color: #666;
+    font-size: 0.85em;
+    margin-top: 5px;
+  }
+  
+  .no-tokens {
+    color: #666;
+    font-style: italic;
+    padding: 15px;
+    text-align: center;
+  }
+  
+  .danger-section {
+    background: #fff3cd;
+    border-left: 4px solid #ff6b6b;
+    padding: 20px;
+    margin: 30px 0;
+    border-radius: 8px;
+  }
+  
+  .danger-section h3 {
+    margin-top: 0;
+    color: #d32f2f;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .danger-section p {
+    color: #666;
+    margin-bottom: 15px;
+  }
+  
+  .revoke-btn {
+    padding: 12px 24px;
+    background: #d32f2f;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1em;
+    transition: background 0.3s;
+  }
+  
+  .revoke-btn:hover { background: #b71c1c; }
+  
+  .warning-icon { font-size: 1.2em; }
+  
+  @media (max-width: 768px) {
+    .info-row { flex-direction: column; gap: 5px; }
+    .url-input-group { flex-direction: column; }
+    .copy-btn { width: 100%; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="manage-container">
+  <div class="page-header">
+    <h1>⚙️ Manage Your Export Token</h1>
+    <p class="subtitle">View and manage your permanent export URLs and access tokens</p>
+  </div>
+
+  <div class="info-section">
+    <h3 style="margin-top: 0; color: #1a73e8;">📋 Account Information</h3>
+    <div class="info-row">
+      <span class="info-label">User Email:</span>
+      <span class="info-value">{{ user_email }}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Provider:</span>
+      <span class="info-value">{{ provider|upper }}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Export Token:</span>
+      <span class="info-value">{{ export_token }}</span>
+    </div>
+  </div>
+
+  <div class="export-section">
+    <h3>🔗 Permanent Export URLs</h3>
+    <p style="color: #666; margin-bottom: 15px;">
+      These URLs work forever without authentication. Keep them secret - anyone with these URLs can access your data!
+    </p>
+    
+    <div class="url-item">
+      <div class="url-label">📄 Contacts Export (CSV)</div>
+      <div class="url-input-group">
+        <input type="text" class="url-input" id="contactsUrl" value="{{ export_contacts_url }}" readonly>
+        <button class="copy-btn" onclick="copyToClipboard('contactsUrl', this)">Copy</button>
+      </div>
+    </div>
+    
+    <div class="url-item">
+      <div class="url-label">📅 Calendar Export (ICS)</div>
+      <div class="url-input-group">
+        <input type="text" class="url-input" id="calendarUrl" value="{{ export_calendar_url }}" readonly>
+        <button class="copy-btn" onclick="copyToClipboard('calendarUrl', this)">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tokens-section">
+    <h3>🔑 Active Bearer Tokens</h3>
+    <p style="color: #666; margin-bottom: 15px;">
+      These is your API access tokens used for authenticated requests. Each token was created when you authorized the app.
+    </p>
+    
+    {% if tokens and tokens|length > 0 %}
+      {% for t in tokens %}
+      <div class="token-item">
+        <div>
+          <span class="token-prefix">Token:</span> {{ t }}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="no-tokens">No active bearer tokens found.</div>
+    {% endif %}
+  </div>
+
+  <div class="danger-section">
+    <h3><span class="warning-icon">⚠️</span> Danger Zone</h3>
+    <p>
+      <strong>Revoking your tokens will:</strong>
+    </p>
+    <ul style="color: #666; margin: 10px 0 15px 20px;">
+      <li>Delete all bearer tokens associated with your account</li>
+      <li>Revoke OAuth access with {{ provider|capitalize }}</li>
+      <li>Invalidate all export URLs permanently</li>
+      <li>Remove all stored credentials from the database</li>
+    </ul>
+    <p style="color: #d32f2f; font-weight: 600;">
+      ⚠️ This action cannot be undone. You will need to re-authorize to create new tokens.
+    </p>
+    
+    <form id="revokeForm" method="POST" action="/manage/{{ export_token }}/revoke">
+      <button class="revoke-btn" type="submit">🗑️ Revoke and Delete All Tokens</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Copy URL to clipboard
+  function copyToClipboard(inputId, button) {
+    const input = document.getElementById(inputId);
+    const originalText = button.textContent;
+    
+    input.select();
+    input.setSelectionRange(0, 99999); // For mobile devices
+    
+    try {
+      document.execCommand('copy');
+      button.textContent = '✓ Copied!';
+      button.classList.add('copied');
+      
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.classList.remove('copied');
+      }, 2000);
+    } catch (err) {
+      button.textContent = '✗ Failed';
+      setTimeout(() => {
+        button.textContent = originalText;
+      }, 2000);
+    }
+    
+    // Deselect
+    window.getSelection().removeAllRanges();
+  }
+  
+  // Handle revoke form submission
+  const form = document.getElementById('revokeForm');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const confirmMessage = 
+      'Are you ABSOLUTELY SURE you want to revoke and delete all tokens?\n\n' +
+      'This will:\n' +
+      '• Delete all bearer tokens\n' +
+      '• Invalidate all export URLs\n' +
+      '• Revoke OAuth access\n' +
+      '• Remove all stored credentials\n\n' +
+      'This action CANNOT be undone!\n\n' +
+      'Click OK to proceed or Cancel to go back.';
+    
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+      
+    try {
+      const resp = await fetch(form.action, { method: 'POST' });
+      
+      if (resp.ok) {
+        alert('✓ Successfully revoked all tokens and deleted credentials.\n\nYou will be redirected to the homepage.');
+        window.location.href = '/';
+      } else {
+        const errorText = await resp.text();
+        alert('✗ Failed to revoke tokens.\n\nError: ' + (errorText || 'Unknown error') + '\n\nPlease check the server logs.');
+      }
+    } catch (error) {
+      alert('✗ Network error occurred.\n\nError: ' + error.message + '\n\nPlease try again or check your connection.');
+    }
+  });
+  
+  // Add click handlers to URL inputs for easy selection
+  document.querySelectorAll('.url-input').forEach(input => {
+    input.addEventListener('click', function() {
+      this.select();
+    });
+  });
+</script>
+{% endblock %}

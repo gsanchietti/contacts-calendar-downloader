@@ -7,3 +7,5 @@ prometheus-client
 gunicorn
 icalendar
 python-dateutil
+msal
+requests

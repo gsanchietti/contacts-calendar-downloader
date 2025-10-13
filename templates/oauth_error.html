@@ -1,209 +1,54 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Authorization Error - Google Contacts Downloader</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f9f9f9;
-        }
-        .container {
-            background-color: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .error-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .error-icon {
-            color: #ea4335;
-            font-size: 4em;
-            margin-bottom: 10px;
-        }
-        h1 {
-            color: #ea4335;
-            margin-bottom: 10px;
-        }
-        .error-info {
-            background-color: #fce8e6;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-            border-left: 4px solid #ea4335;
-        }
-        .troubleshooting {
-            background-color: #e8f0fe;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-            border-left: 4px solid #1a73e8;
-        }
-        .solution-steps {
-            counter-reset: step-counter;
-            margin: 15px 0;
-        }
-        .step {
-            margin: 15px 0;
-            padding-left: 30px;
-            position: relative;
-        }
-        .step::before {
-            content: counter(step-counter);
-            counter-increment: step-counter;
-            position: absolute;
-            left: 0;
-            top: 0;
-            background-color: #1a73e8;
-            color: white;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        .code {
-            background-color: #f8f9fa;
-            border: 1px solid #e1e4e8;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            color: #24292e;
-            display: inline-block;
-            margin: 5px 0;
-        }
-        .actions {
-            margin-top: 30px;
-            text-align: center;
-        }
-        .btn {
-            display: inline-block;
-            padding: 12px 24px;
-            margin: 10px;
-            background-color: #1a73e8;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 500;
-        }
-        .btn:hover {
-            background-color: #1557b0;
-        }
-        .btn-secondary {
-            background-color: #5f6368;
-        }
-        .btn-secondary:hover {
-            background-color: #3c4043;
-        }
-        .footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
-            text-align: center;
-            color: #666;
-        }
-        .details {
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 6px;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            color: #666;
-            margin: 15px 0;
-            word-break: break-word;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="error-header">
-            <div class="error-icon">❌</div>
-            <h1>Authorization Failed</h1>
-            <p>There was a problem connecting your Google account.</p>
-        </div>
+{% extends 'layout.html' %}
 
-        <div class="error-info">
-            <h3>Error Details</h3>
-            <p><strong>{{ error_message }}</strong></p>
-            {% if error_details %}
-            <div class="details">{{ error_details }}</div>
-            {% endif %}
-        </div>
+{% block title %}Authorization Error{% endblock %}
 
-        {% if troubleshooting %}
-        <div class="troubleshooting">
-            <h3>How to Fix This</h3>
-            
-            {% if troubleshooting.error_type == 'redirect_uri_mismatch' %}
-            <p>The redirect URI in your request doesn't match what's configured in Google Cloud Console.</p>
-            
-            <div class="solution-steps">
-                <div class="step">
-                    Go to <a href="{{ troubleshooting.google_cloud_console }}" target="_blank">Google Cloud Console</a>
-                </div>
-                <div class="step">
-                    Navigate to <strong>APIs & Services → Credentials → OAuth 2.0 Client IDs</strong>
-                </div>
-                <div class="step">
-                    Add this URI to "Authorized redirect URIs":<br>
-                    <span class="code">{{ troubleshooting.check_uri }}</span>
-                </div>
-                <div class="step">
-                    Click <strong>Save</strong> and wait a few minutes for changes to propagate
-                </div>
-                <div class="step">
-                    Try the authorization again
-                </div>
-            </div>
-            
-            {% elif troubleshooting.error_type == 'invalid_client' %}
-            <p>Your credentials.json file is invalid or doesn't match the OAuth client.</p>
-            
-            <div class="solution-steps">
-                <div class="step">
-                    Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console - Credentials</a>
-                </div>
-                <div class="step">
-                    Download the correct <code>credentials.json</code> file for your OAuth 2.0 Client ID
-                </div>
-                <div class="step">
-                    Replace the existing credentials.json file
-                </div>
-                <div class="step">
-                    Restart the service and try again
-                </div>
-            </div>
-            
-            {% else %}
-            <p><strong>Solution:</strong> {{ troubleshooting.solution }}</p>
-            {% if troubleshooting.details %}
-            <div class="details">{{ troubleshooting.details }}</div>
-            {% endif %}
-            {% endif %}
-        </div>
-        {% endif %}
+{% block head %}
+<style>
+  .error-header { text-align: center; margin-bottom: 30px; }
+  .error-icon { color: #ea4335; font-size: 4em; margin-bottom: 10px; }
+  .error-info { background-color: #fce8e6; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ea4335; }
+  .troubleshooting { background-color: #e8f0fe; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #1a73e8; }
+  .code { background-color: #f8f9fa; border: 1px solid #e1e4e8; border-radius: 6px; padding: 8px 12px; font-family: monospace; display:inline-block; }
+  .details { background-color:#f8f9fa; padding:15px; border-radius:6px; font-family:monospace; margin:15px 0; word-break:break-word }
+</style>
+{% endblock %}
 
-        <div class="actions">
-            <a href="/auth" class="btn">Try Again</a>
-            <a href="/privacy_policy" class="btn btn-secondary">Privacy Policy</a>
-        </div>
-
-        <div class="footer">
-            <p>Google Contacts Downloader - Secure, read-only access to your Google Contacts</p>
-            <p>Need help? Check our <a href="https://github.com/gsanchietti/google-contacts-downloader" target="_blank">documentation</a></p>
-        </div>
+{% block content %}
+  <div class="container">
+    <div class="error-header">
+      <div class="error-icon">❌</div>
+      <h1>Authorization Failed</h1>
+      <p>There was a problem connecting your account.</p>
     </div>
-</body>
-</html>
+
+    <div class="error-info">
+      <h3>Error Details</h3>
+      <p><strong>{{ error_message or error }}</strong></p>
+      {% if error_details %}
+        <div class="details">{{ error_details }}</div>
+      {% endif %}
+    </div>
+
+    {% if troubleshooting %}
+      <div class="troubleshooting">
+        <h3>How to Fix This</h3>
+        {% if troubleshooting.error_type == 'redirect_uri_mismatch' %}
+          <p>The redirect URI in your request doesn't match what's configured in Google Cloud Console.</p>
+          <div class="solution-steps">
+            <div class="step">Go to <a href="{{ troubleshooting.google_cloud_console }}" target="_blank">Google Cloud Console</a></div>
+            <div class="step">Add this URI to "Authorized redirect URIs": <br><span class="code">{{ troubleshooting.check_uri }}</span></div>
+          </div>
+        {% else %}
+          <p><strong>Solution:</strong> {{ troubleshooting.solution }}</p>
+          {% if troubleshooting.details %}
+            <div class="details">{{ troubleshooting.details }}</div>
+          {% endif %}
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <div class="actions">
+      <a href="/auth" class="btn">Try Again</a>
+    </div>
+  </div>
+{% endblock %}

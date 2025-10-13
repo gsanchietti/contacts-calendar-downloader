@@ -17,7 +17,6 @@ services:
       - ./traefik-dynamic.yml:/etc/traefik/dynamic.yml:z
     environment:
       - DOMAIN=${DOMAIN}
-      - ACME_EMAIL=${ACME_EMAIL}
     networks:
       - proxy
 
@@ -26,18 +25,28 @@ services:
     container_name: google-contacts-downloader
     restart: unless-stopped
     environment:
-      # Database path (will be mounted as volume)
-      - GOOGLE_DATABASE=/app/data/credentials.db
-      # Encryption key (should be set in .env file)
-      - GOOGLE_ENCRYPTION_KEY=${GOOGLE_ENCRYPTION_KEY}
-      # Tokens directory
-      - GOOGLE_TOKENS_DIR=/app/data/tokens
-      # Flask configuration
-      - FLASK_ENV=${FLASK_ENV}
-      # Google API credentials
-      - GOOGLE_CREDENTIALS=/app/credentials/credentials.json
-      # Set oauth callback to Traefik router
-      - OAUTH_REDIRECT_URI=https://${DOMAIN}/oauth2callback
+      # Core Configuration
+      - DATABASE=${DATABASE:-/app/data/credentials.db}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - GOOGLE_CREDENTIALS=${GOOGLE_CREDENTIALS:-/app/credentials/google.json}
+      - MICROSOFT_CREDENTIALS=${MICROSOFT_CREDENTIALS:-/app/credentials/microsoft.json}
+      
+      # Server Configuration
+      - HOST=${HOST:-localhost}
+      - PORT=${PORT:-5000}
+      - PROTOCOL=${PROTOCOL:-https}
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
+      
+      # OAuth Configuration
+      - GOOGLE_OAUTH_REDIRECT_URI=${GOOGLE_OAUTH_REDIRECT_URI:-${PROTOCOL}://${HOST}:${PORT}/google/oauth2callback}
+      - MICROSOFT_OAUTH_REDIRECT_URI=${MICROSOFT_OAUTH_REDIRECT_URI:-${PROTOCOL}://${HOST}:${PORT}/microsoft/oauth2callback}
+
+      # API Configuration
+      - PERSON_FIELDS=${PERSON_FIELDS:-names,emailAddresses,phoneNumbers,addresses,organizations,birthdays}
+      - PAGE_SIZE=${PAGE_SIZE:-1000}
+      
+      # Flask Configuration (compatibility)
+      - FLASK_ENV=${FLASK_ENV:-production}
     ports:
       - "8000:8000"
     volumes:
