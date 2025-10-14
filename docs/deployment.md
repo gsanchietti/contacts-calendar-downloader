@@ -29,8 +29,8 @@ sysctl -p /etc/sysctl.d/user_priv_ports.conf
 ```bash
 # 1. Clone repository as service user
 su -u downloader
-git clone https://github.com/gsanchietti/google-contacts-downloader.git
-cd google-contacts-downloader
+git clone https://github.com/gsanchietti/contacts-calendar-downloader.git
+cd contacts-calendar-downloader
 
 # 2. Configure environment
 cp .env.example .env
@@ -54,6 +54,14 @@ curl https://your-domain.com/health
 - **Application**: https://your-domain.com
 - **Health/Metrics**: https://your-domain.com/health, /metrics
 
+#### Port Configuration
+
+The service uses different ports depending on the deployment method:
+
+- **Development**: Runs on port `5000` (default, configurable via `PORT` environment variable)
+- **Container**: Internal port `8000` (mapped to host port via `PORT` environment variable)
+- **Production with Traefik**: Ports `80`/`443` (handled by Traefik reverse proxy)
+
 ### Manual Container Deployment
 
 For custom deployment scenarios or different container runtimes.
@@ -62,7 +70,7 @@ For custom deployment scenarios or different container runtimes.
 
 ```bash
 # Build image
-podman build -t google-contacts-downloader .
+podman build -t contacts-calendar-downloader .
 
 # Create persistent volume
 podman volume create contacts-data
@@ -73,17 +81,18 @@ podman run --rm --name contacts-service \
   -v contacts-data:/app/data:z \
   -v ./credentials.json:/app/credentials.json:ro,z \
   -e GOOGLE_CREDENTIALS=/app/credentials.json \
-  -e DATABASE_PATH=/app/data/credentials.db \
+  -e DATABASE=/app/data/credentials.db \
   -e ENCRYPTION_KEY="$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" \
-  -e OAUTH_REDIRECT_URI="https://your-domain.com/oauth2callback" \
-  google-contacts-downloader
+  -e GOOGLE_OAUTH_REDIRECT_URI="https://your-domain.com/google/oauth2callback" \
+  -e MICROSOFT_OAUTH_REDIRECT_URI="https://your-domain.com/microsoft/oauth2callback" \
+  contacts-calendar-downloader
 ```
 
 #### Docker Alternative
 
 ```bash
 # Build image
-docker build -t google-contacts-downloader .
+docker build -t contacts-calendar-downloader .
 
 # Run container
 docker run --rm --name contacts-service \
@@ -91,10 +100,11 @@ docker run --rm --name contacts-service \
   -v contacts-data:/app/data \
   -v ./credentials.json:/app/credentials.json:ro \
   -e GOOGLE_CREDENTIALS=/app/credentials.json \
-  -e DATABASE_PATH=/app/data/credentials.db \
+  -e DATABASE=/app/data/credentials.db \
   -e ENCRYPTION_KEY="$(openssl rand -base64 32)" \
-  -e OAUTH_REDIRECT_URI="https://your-domain.com/oauth2callback" \
-  google-contacts-downloader
+  -e GOOGLE_OAUTH_REDIRECT_URI="https://your-domain.com/google/oauth2callback" \
+  -e MICROSOFT_OAUTH_REDIRECT_URI="https://your-domain.com/microsoft/oauth2callback" \
+  contacts-calendar-downloader
 ```
 ## Monitoring & Observability
 
@@ -103,10 +113,10 @@ docker run --rm --name contacts-service \
 ```bash
 # Basic health check
 curl https://your-domain.com/health
-# {"status": "healthy", "authenticated_users": 5}
+# {"status": "healthy"}
 
-# Detailed health with credentials check
-curl https://your-domain.com/health?details=true
+# Health check (credentials validation included)
+curl https://your-domain.com/health
 ```
 
 ### Prometheus Metrics
@@ -164,13 +174,13 @@ increase(gcd_database_size_bytes[1h])
 
 ```bash
 # View application logs
-podman-compose logs -f google-contacts-downloader
+podman-compose logs -f contacts-calendar-downloader
 
 # View Traefik logs
 podman-compose logs -f traefik
 
 # Search for errors
-podman-compose logs google-contacts-downloader | grep ERROR
+podman-compose logs contacts-calendar-downloader | grep ERROR
 ```
 
 

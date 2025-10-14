@@ -103,7 +103,7 @@ http:
     contacts:
       loadBalancer:
         servers:
-          - url: "http://google-contacts-downloader:8000"
+          - url: "http://contacts-calendar-downloader:8000"
 EOF
 
 # Build and start services
@@ -124,7 +124,7 @@ for i in {1..30}; do
     if [ $i -eq 30 ]; then
         echo "❌ Service health check failed after 30 attempts"
         echo "📋 Checking logs..."
-        podman-compose logs --tail=20 google-contacts-downloader
+        podman-compose logs --tail=20 contacts-calendar-downloader
         exit 1
     fi
     echo "   Attempt $i/30..."

@@ -66,6 +66,10 @@ Initiates OAuth flow for a new user and returns authorization URL.
 ### GET /google/oauth2callback and /microsoft/oauth2callback
 Handles the OAuth callback after user authorization. Saves user-specific token.
 
+**Note**: These are the OAuth redirect URIs that must be configured in your provider consoles:
+- Google: `PROTOCOL://HOST:PORT/google/oauth2callback`
+- Microsoft: `PROTOCOL://HOST:PORT/microsoft/oauth2callback`
+
 **Content Negotiation:** Returns JSON for API clients or HTML for browser requests based on the `Accept` header.
 
 **API Client Response (Accept: application/json):**
@@ -223,7 +227,7 @@ curl http://localhost:5000/metrics
 **Prometheus Configuration:**
 ```yaml
 scrape_configs:
-  - job_name: 'google-contacts-downloader'
+  - job_name: 'contacts-calendar-downloader'
     static_configs:
       - targets: ['localhost:5000']
     scrape_interval: 30s

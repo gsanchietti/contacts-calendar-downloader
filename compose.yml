@@ -20,9 +20,9 @@ services:
     networks:
       - proxy
 
-  google-contacts-downloader:
+  contacts-calendar-downloader:
     build: .
-    container_name: google-contacts-downloader
+    container_name: contacts-calendar-downloader
     restart: unless-stopped
     environment:
       # Core Configuration

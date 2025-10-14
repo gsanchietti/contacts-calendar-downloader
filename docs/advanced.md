@@ -26,7 +26,7 @@ GOOGLE_OAUTH_REDIRECT_URI=""                    # Override Google OAuth redirect
 MICROSOFT_OAUTH_REDIRECT_URI=""                 # Override Microsoft OAuth redirect URI
 
 # API Configuration
-PERSON_FIELDS="names,emailAddresses,phoneNumbers,addresses,organizations,birthdays"  # Google People API fields
+PERSON_FIELDS="names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,nicknames,metadata"  # Google People API fields
 PAGE_SIZE="1000"                                # Contacts per API request (max 1000)
 ```
 
@@ -99,7 +99,7 @@ PAGE_SIZE="1000"                                # Contacts per API request (max 
 
 #### PERSON_FIELDS
 - **Type**: Comma-separated string
-- **Default**: `names,emailAddresses,phoneNumbers,addresses,organizations,birthdays`
+- **Default**: `names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,nicknames,metadata`
 - **Description**: Google People API fields to request when fetching contacts
 - **Available Fields**: See [Google People API documentation](https://developers.google.com/people/api/rest/v1/people#Person)
 

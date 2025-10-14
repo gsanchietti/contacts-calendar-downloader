@@ -64,17 +64,21 @@ http://localhost:5000/google/oauth2callback
 **Custom Port:**
 ```bash
 export PORT=8000
-# Redirect URI becomes: http://localhost:8000/google/oauth2callback
+# Redirect URIs become: 
+# http://localhost:8000/google/oauth2callback
+# http://localhost:8000/microsoft/oauth2callback
 ```
 
 **Production with HTTPS:**
 ```bash
-export OAUTH_REDIRECT_URI="https://your-production-domain.com/google/oauth2callback"
+export GOOGLE_OAUTH_REDIRECT_URI="https://your-production-domain.com/google/oauth2callback"
+export MICROSOFT_OAUTH_REDIRECT_URI="https://your-production-domain.com/microsoft/oauth2callback"
 ```
 
 **Behind Reverse Proxy:**
 ```bash
-export OAUTH_REDIRECT_URI="https://api.example.com/google/oauth2callback"
+export GOOGLE_OAUTH_REDIRECT_URI="https://api.example.com/google/oauth2callback"
+export MICROSOFT_OAUTH_REDIRECT_URI="https://api.example.com/microsoft/oauth2callback"
 ```
 
 ## Microsoft Azure / Microsoft 365 Setup
