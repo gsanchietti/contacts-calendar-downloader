@@ -34,22 +34,6 @@ curl -H "Authorization: Bearer <your_access_token>" "http://localhost:5000/downl
 ### GET /
 Home page with service overview and quick start guide. **Not authenticated** - publicly accessible.
 
-**Content-Type:** `text/html`
-
-**Description:**
-Displays a beautiful landing page with:
-- 📇 **Service Overview** - Multi-tenant architecture and security features
-- 🚀 **Quick Start Guide** - Step-by-step instructions for new users
-- 📊 **Live Statistics** - Current authenticated user count and service status
-- 🔗 **Navigation Links** - Easy access to all endpoints and documentation
-- ⚠️ **Service Notices** - Real-time status alerts and configuration warnings
-
-**Features:**
-- **Responsive design** - Works perfectly on mobile and desktop
-- **Service health monitoring** - Shows current status and user statistics
-- **Feature showcase** - Highlights security and multi-tenant capabilities
-- **Quick access buttons** - Direct links to start OAuth or view policies
-
 **Example:**
 ```bash
 curl http://localhost:5000/
@@ -79,7 +63,7 @@ Initiates OAuth flow for a new user and returns authorization URL.
 
 ---
 
-### GET /oauth2callback
+### GET /google/oauth2callback and /microsoft/oauth2callback
 Handles the OAuth callback after user authorization. Saves user-specific token.
 
 **Content Negotiation:** Returns JSON for API clients or HTML for browser requests based on the `Accept` header.
@@ -130,7 +114,7 @@ curl -H "Authorization: Bearer your_access_token" "http://localhost:5000/downloa
 ---
 
 ### GET /download/calendar
-Downloads calendar events for the authenticated user in ICS format. **Requires authentication and calendar scope.**
+Downloads calendar events for the authenticated user in ICS format. **Requires authentication..**
 
 **Headers:**
 - `Authorization: Bearer <access_token>` (required)
@@ -202,9 +186,6 @@ Health check endpoint showing service status and user count.
 ```json
 {
   "status": "healthy",
-  "credentials_path": "True",
-  "tokens_dir": "tokens",
-  "authenticated_users": 2
 }
 ```
 
@@ -288,72 +269,6 @@ curl http://localhost:5000/privacy_policy
 - Building trust with users before authentication
 - Meeting Google API integration compliance requirements
 
-## OAuth Flow Experience
-
-The service provides different experiences based on how OAuth is accessed:
-
-**Browser Users (Human-Friendly):**
-1. Visit authorization URL in browser → Google OAuth consent screen
-2. After authorization → Beautiful success page with:
-   - ✅ Clear success confirmation
-   - 🔑 Copy-paste access token (click to select, button to copy)
-   - 📋 Ready-to-use curl examples with your actual token
-   - 🔗 Step-by-step API usage instructions
-
-**API Clients (Machine-Friendly):**
-```bash
-# Request with JSON Accept header gets JSON response
-curl -H "Accept: application/json" http://localhost:5000/oauth2callback?code=...
-# {"status": "success", "access_token": "...", "user_email": "..."}
-```
-
-**Error Handling:**
-Both browser and API clients get appropriate error responses with troubleshooting guidance for common OAuth issues like redirect URI mismatches.
-
-## Testing with curl
-
-```bash
-# Start the service in one terminal
-python downloader.py
-
-# In another terminal, check service health
-curl -s http://localhost:5000/health | jq .
-
-# Get authorization URL and check redirect URI
-curl -s http://localhost:5000/auth | jq .
-
-# The response will show you the exact redirect URI being used:
-# {
-#   "authorization_url": "https://accounts.google.com/o/oauth2/auth?...",
-#   "redirect_uri_used": "http://localhost:5000/oauth2callback",
-#   "message": "Visit this URL to authorize the application...",
-#   "instructions": "Add the redirect_uri_used value to 'Authorized redirect URIs'...",
-#   "troubleshooting": { ... }
-# }
-
-# After completing OAuth in browser, you'll get an access token
-# Use the access token to download contacts
-
-# Set your access token (replace with actual token from OAuth response)
-ACCESS_TOKEN="your_access_token_here"
-
-# Get current user info
-curl -H "Authorization: Bearer $ACCESS_TOKEN" http://localhost:5000/me | jq .
-
-# Get contacts as JSON
-curl -H "Authorization: Bearer $ACCESS_TOKEN" "http://localhost:5000/download/contacts?format=json" | jq '.contacts[0]'
-
-# Get contacts as CSV
-curl -H "Authorization: Bearer $ACCESS_TOKEN" "http://localhost:5000/download/contacts?format=csv" | head -5
-
-# Save to file
-curl -H "Authorization: Bearer $ACCESS_TOKEN" "http://localhost:5000/download/contacts?format=json" > contacts.json
-curl -H "Authorization: Bearer $ACCESS_TOKEN" "http://localhost:5000/download/contacts?format=csv" > contacts.csv
-
-# Revoke token when done
-curl -X POST -H "Authorization: Bearer $ACCESS_TOKEN" http://localhost:5000/token/revoke
-```
-
 ## Data Formats
 
 ### CSV Output
@@ -407,24 +322,3 @@ Example JSON structure:
 - **access_denied** - User denied authorization
 - **invalid_grant** - Authorization code expired or invalid
 - **unsupported_grant_type** - Invalid OAuth grant type
-
-### Troubleshooting API Issues
-
-**Token Expired:**
-```bash
-# Check if token is valid
-curl -H "Authorization: Bearer $ACCESS_TOKEN" http://localhost:5000/me
-# If expired, re-authorize via /auth endpoint
-```
-
-**Invalid Token:**
-```bash
-# Response: {"error": "Invalid token"}
-# Solution: Get new token via OAuth flow
-```
-
-**Rate Limiting:**
-```bash
-# Response: 429 Too Many Requests
-# Solution: Wait and retry, or reduce request frequency
-```
