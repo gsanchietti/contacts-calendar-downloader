@@ -22,7 +22,7 @@ DEFAULT_SCOPES = [
 ]
 
 
-def authenticate_google(config, user_email: str, save_credentials_fn) -> Optional[Any]:
+def authenticate_google(config, user_email: str) -> Optional[Any]:
     """Authenticate a specific user and return an authorized People API service.
     
     Args:
@@ -79,7 +79,7 @@ def authenticate_google(config, user_email: str, save_credentials_fn) -> Optiona
                     return None
                 creds.refresh(Request())
                 # Save refreshed credentials via callback
-                save_credentials_fn(config, user_email, creds, provider='google')
+                db.save_user_credentials(user_email, creds, provider='google')
             except Exception:
                 return None
         else:

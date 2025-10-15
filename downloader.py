@@ -162,18 +162,6 @@ def init_database(config: Config) -> None:
     print(f"✅ PostgreSQL database initialized successfully")
 
 
-def get_user_provider(config: Config, user_email: str) -> str:
-    """Return the provider associated with the given user_email, default to 'google'."""
-    db = database.get_db(config)
-    return db.get_user_provider(user_email)
-
-
-def store_oauth_flow(config: Config, state: str, flow_info: Dict[str, Any]) -> None:
-    """Store OAuth flow configuration in database."""
-    db = database.get_db(config)
-    db.store_oauth_flow(state, flow_info)
-
-
 def get_oauth_flow(config: Config, state: str, provider: str = 'google') -> Optional[Flow]:
     """Retrieve OAuth flow from database and recreate Flow object."""
     db = database.get_db(config)
@@ -192,19 +180,6 @@ def get_oauth_flow(config: Config, state: str, provider: str = 'google') -> Opti
         return flow
     
     return None
-
-
-def get_oauth_flow_row(config: Config, state: str) -> Optional[Dict[str, Any]]:
-    """Return the raw oauth_flows DB row for a given state (if recent)."""
-    db = database.get_db(config)
-    return db.get_oauth_flow_row(state)
-
-
-def delete_oauth_flow(config: Config, state: str) -> None:
-    """Delete OAuth flow from database."""
-    db = database.get_db(config)
-    db.delete_oauth_flow(state)
-
 
 def get_redirect_uri(provider: str = 'google') -> str:
     """Get the redirect URI for OAuth based on provider."""
@@ -229,44 +204,6 @@ def get_redirect_uri(provider: str = 'google') -> str:
         return f"{base_uri}/google/oauth2callback"
 
 
-def save_access_token(config: Config, token: str, user_email: str, provider: str = 'google') -> None:
-    """Save access token with encryption to database."""
-    db = database.get_db(config)
-    db.create_access_token(token, user_email, provider)
-
-
-def get_user_from_token(token: str, provider: Optional[str] = None) -> Optional[str]:
-    """Get user email from encrypted access token stored in database."""
-    config = get_config()
-    db = database.get_db(config)
-    return db.get_user_from_token(token, provider)
-
-
-def get_provider_from_token(token: str) -> Optional[Dict[str, str]]:
-    """Return a dict with 'user_email' and 'provider' for the given access token, or None."""
-    config = get_config()
-    db = database.get_db(config)
-    return db.get_provider_from_token(token)
-
-
-def revoke_access_token(config: Config, token: str, provider: str = 'google') -> bool:
-    """Revoke encrypted access token by deleting it from database."""
-    db = database.get_db(config)
-    return db.revoke_access_token(token, provider)
-
-
-def list_user_tokens(config: Config, user_email: str, provider: str = 'google') -> List[str]:
-    """List all active tokens for a specific user."""
-    db = database.get_db(config)
-    return db.list_user_tokens(user_email, provider)
-
-
-def save_user_credentials(config: Config, user_email: str, credentials: Any, provider: str = 'google') -> None:
-    """Save user OAuth credentials with encryption to database."""
-    db = database.get_db(config)
-    db.save_user_credentials(user_email, credentials, provider)
-
-
 def generate_export_token() -> str:
     """Generate a secure export token."""
     return secrets.token_urlsafe(48)
@@ -285,19 +222,6 @@ def save_export_token(config: Config, user_email: str, provider: str = 'google')
     export_token = generate_export_token()
     db.save_export_token(export_token, user_email, provider)
     return export_token
-
-
-def get_user_from_export_token(config: Config, export_token: str) -> Optional[Dict[str, str]]:
-    """Get user email and provider from export token."""
-    db = database.get_db(config)
-    return db.get_user_from_export_token(export_token)
-
-
-def revoke_export_token(config: Config, export_token: str) -> bool:
-    """Revoke export token."""
-    db = database.get_db(config)
-    return db.revoke_export_token(export_token)
-
 
 def load_user_credentials(config: Config, user_email: str, provider: str = 'google') -> Optional[Any]:
     """Load user OAuth credentials with decryption from database."""
@@ -407,6 +331,7 @@ def get_base_url(config: Config) -> str:
 
 def authenticate_request() -> Optional[str]:
     """Authenticate the current request and return user email if valid."""
+    db = database.get_db(get_config())
     # Check for Authorization header with Bearer token
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
@@ -414,7 +339,7 @@ def authenticate_request() -> Optional[str]:
     
     token = auth_header.split(' ', 1)[1]
     # Search across providers for the token
-    return get_user_from_token(token, provider=None)
+    return db.get_user_from_token(token, provider=None)
 
 
 # Initialize database on app startup (needed for Gunicorn)
@@ -437,6 +362,7 @@ def index():
 def auth():
     """Get authorization URL for a new user."""
     config = get_config()
+    db = database.get_db(config)
 
     if not config.google_credentials_path.exists():
         return jsonify({
@@ -487,7 +413,7 @@ def auth():
                 'scopes': full_scopes,
                 'redirect_uri': redirect_uri
             }
-            store_oauth_flow(config, state, flow_info)
+            db.store_oauth_flow(state, flow_info)
 
         else:
             # Default: Google flow
@@ -511,7 +437,7 @@ def auth():
                 'scopes': DEFAULT_SCOPES,
                 'redirect_uri': redirect_uri
             }
-            store_oauth_flow(config, state, flow_info)
+            db.store_oauth_flow(state, flow_info)
 
         # Prepare the payload to return for API clients - include provider and the exact scopes used
         oauth_scopes = flow_info.get('scopes') if isinstance(flow_info, dict) else DEFAULT_SCOPES
@@ -560,6 +486,7 @@ def auth():
 def google_oauth2callback():
     """Handle Google OAuth callback and save user-specific token."""
     config = get_config()
+    db = database.get_db(config)
     
     # Get the state parameter from the callback
     state = request.args.get('state')
@@ -588,18 +515,18 @@ def google_oauth2callback():
         from providers.google import handle_oauth_callback as google_handle_oauth_callback
         user_email, creds = google_handle_oauth_callback(config, flow)
         # Persist credentials (saved in main app DB)
-        save_user_credentials(config, user_email, creds, provider='google')
+        db.save_user_credentials(user_email, creds, provider='google')
 
         # Generate access token for this user and persist
         access_token = generate_access_token()
-        save_access_token(config, access_token, user_email, provider='google')
+        db.create_access_token(access_token, user_email, provider='google')
 
         # Generate export token for permanent URLs
         export_token = save_export_token(config, user_email, provider='google')
 
         # Clear the flow from database
         if state:
-            delete_oauth_flow(config, state)
+            db.delete_oauth_flow(state)
 
         # Update metrics
         OAUTH_FLOWS_TOTAL.labels(status='success').inc()
@@ -651,7 +578,7 @@ def google_oauth2callback():
 
         # Clean up the flow on error
         if state:
-            delete_oauth_flow(config, state)
+            db.delete_oauth_flow(state)
 
         # Update metrics
         OAUTH_FLOWS_TOTAL.labels(status='error').inc()
@@ -671,12 +598,13 @@ def google_oauth2callback():
 def microsoft_oauth2callback():
     """Handle Microsoft OAuth callback and save user-specific token."""
     config = get_config()
+    db = database.get_db(config)
     
     # Get the state parameter from the callback
     state = request.args.get('state')
     
     # Get Microsoft flow row
-    flow_row = get_oauth_flow_row(config, state) if state else None
+    flow_row = db.get_oauth_flow_row(state) if state else None
     
     if not flow_row or flow_row['provider'] != 'microsoft':
         error_msg = "No Microsoft authorization flow in progress or invalid state"
@@ -699,18 +627,18 @@ def microsoft_oauth2callback():
         from providers.microsoft import handle_oauth_callback as ms_handle_oauth_callback
         user_email, creds = ms_handle_oauth_callback(config, flow_row)
         # Persist credentials (normalized dict)
-        save_user_credentials(config, user_email, creds, provider='microsoft')
+        db.save_user_credentials(user_email, creds, provider='microsoft')
 
         # Generate access token for this user and persist
         access_token = generate_access_token()
-        save_access_token(config, access_token, user_email, provider='microsoft')
+        db.create_access_token(access_token, user_email, provider='microsoft')
 
         # Generate export token for permanent URLs
         export_token = save_export_token(config, user_email, provider='microsoft')
 
         # Clear the flow from database
         if state:
-            delete_oauth_flow(config, state)
+            db.delete_oauth_flow(state)
 
         # Update metrics
         OAUTH_FLOWS_TOTAL.labels(status='success').inc()
@@ -762,7 +690,7 @@ def microsoft_oauth2callback():
 
         # Clean up the flow on error
         if state:
-            delete_oauth_flow(config, state)
+            db.delete_oauth_flow(state)
 
         # Update metrics
         OAUTH_FLOWS_TOTAL.labels(status='error').inc()
@@ -782,6 +710,7 @@ def microsoft_oauth2callback():
 def download_contacts_endpoint() -> Any:
     """Download contacts for the authenticated user in specified format."""
     config = get_config()
+    db = database.get_db(config)
     format_param = request.args.get('format', 'csv').lower()
 
     # Authenticate the request and determine provider from token
@@ -794,7 +723,7 @@ def download_contacts_endpoint() -> Any:
         }), 401
 
     token = auth_header.split(' ', 1)[1]
-    token_info = get_provider_from_token(token)
+    token_info = db.get_provider_from_token(token)
     if not token_info:
         return jsonify({
             "error": "Authentication required",
@@ -814,7 +743,7 @@ def download_contacts_endpoint() -> Any:
     # provider is derived from the access token above
 
     if provider == 'google':
-        service = google_provider.authenticate_google(config, user_email, save_user_credentials)
+        service = google_provider.authenticate_google(config, user_email)
         if not service:
             return jsonify({
                 "error": f"User '{user_email}' token has expired or is invalid",
@@ -834,7 +763,7 @@ def download_contacts_endpoint() -> Any:
             return jsonify({"error": str(e)}), 500
 
     elif provider == 'microsoft':
-        creds = microsoft_provider.authenticate_microsoft(config, user_email, save_user_credentials)
+        creds = microsoft_provider.authenticate_microsoft(config, user_email)
         if not creds:
             return jsonify({
                 "error": f"User '{user_email}' token has expired or is invalid",
@@ -891,6 +820,7 @@ def download_calendar() -> Any:
     HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_calendar", status_code="200").inc()
 
     config = get_config()
+    db = database.get_db(config)
 
     # Authenticate user and determine provider from token
     auth_header = request.headers.get('Authorization')
@@ -906,7 +836,7 @@ def download_calendar() -> Any:
         }), 401
 
     token = auth_header.split(' ', 1)[1]
-    token_info = get_provider_from_token(token)
+    token_info = db.get_provider_from_token(token)
     if not token_info:
         HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_calendar", status_code="401").inc()
         return jsonify({
@@ -947,12 +877,12 @@ def download_calendar() -> Any:
 
             if getattr(credentials, 'expired', False) and getattr(credentials, 'refresh_token', None):
                 credentials.refresh(Request())
-                save_user_credentials(config, user_email, credentials, provider='google')
+                db.save_user_credentials(user_email, credentials, provider='google')
 
             calendar_ics = google_provider.fetch_google_calendar(credentials)
 
         elif provider == 'microsoft':
-            creds = microsoft_provider.authenticate_microsoft(config, user_email, save_user_credentials)
+            creds = microsoft_provider.authenticate_microsoft(config, user_email)
             if not creds:
                 return jsonify({
                     "error": "User not authenticated with Microsoft",
@@ -1000,10 +930,11 @@ def export_contacts_csv(export_token: str) -> Any:
     """Export contacts as CSV using permanent export token."""
     import sys
     config = get_config()
+    db = database.get_db(config)
     
     try:
         # Get user from export token
-        token_info = get_user_from_export_token(config, export_token)
+        token_info = db.get_user_from_export_token(export_token)
         if not token_info:
             return jsonify({"error": "Invalid export token"}), 404
         
@@ -1014,7 +945,7 @@ def export_contacts_csv(export_token: str) -> Any:
         
         if provider == 'google':
             print(f"[DEBUG] Authenticating Google user...", file=sys.stderr, flush=True)
-            service = google_provider.authenticate_google(config, user_email, save_user_credentials)
+            service = google_provider.authenticate_google(config, user_email)
             if not service:
                 return jsonify({"error": "Authentication failed"}), 401
             
@@ -1027,7 +958,7 @@ def export_contacts_csv(export_token: str) -> Any:
             
         elif provider == 'microsoft':
             print(f"[DEBUG] Authenticating Microsoft user...", file=sys.stderr, flush=True)
-            creds = microsoft_provider.authenticate_microsoft(config, user_email, save_user_credentials)
+            creds = microsoft_provider.authenticate_microsoft(config, user_email)
             if not creds:
                 return jsonify({"error": "Authentication failed"}), 401
             
@@ -1071,9 +1002,10 @@ def export_contacts_csv(export_token: str) -> Any:
 def export_calendar_ics(export_token: str) -> Any:
     """Export calendar as ICS using permanent export token."""
     config = get_config()
+    db = database.get_db(config)
     
     # Get user from export token
-    token_info = get_user_from_export_token(config, export_token)
+    token_info = db.get_user_from_export_token(export_token)
     if not token_info:
         return jsonify({"error": "Invalid export token"}), 404
     
@@ -1088,12 +1020,12 @@ def export_calendar_ics(export_token: str) -> Any:
             
             if getattr(credentials, 'expired', False) and getattr(credentials, 'refresh_token', None):
                 credentials.refresh(Request())
-                save_user_credentials(config, user_email, credentials, provider='google')
+                db.save_user_credentials(user_email, credentials, provider='google')
             
             calendar_ics = google_provider.fetch_google_calendar(credentials)
             
         elif provider == 'microsoft':
-            creds = microsoft_provider.authenticate_microsoft(config, user_email, save_user_credentials)
+            creds = microsoft_provider.authenticate_microsoft(config, user_email)
             if not creds:
                 return jsonify({"error": "Authentication failed"}), 401
             
@@ -1119,9 +1051,10 @@ def export_calendar_ics(export_token: str) -> Any:
 def manage_data(export_token: str) -> Any:
     """Management page for user data using export token."""
     config = get_config()
+    db = database.get_db(config)    
     
     # Get user from export token
-    token_info = get_user_from_export_token(config, export_token)
+    token_info = db.get_user_from_export_token(export_token)
     if not token_info:
         return render_template('error.html', error="Invalid management token"), 404
     
@@ -1136,7 +1069,7 @@ def manage_data(export_token: str) -> Any:
     calendar_url = f"{base_url}/export/calendar/{export_token}.ics"
     
     # Get user tokens for display
-    user_tokens = list_user_tokens(config, user_email, provider)
+    user_tokens = db.list_user_tokens(user_email, provider)
     
     return render_template('manage.html', 
                          user_email=user_email,
@@ -1153,9 +1086,10 @@ def manage_data(export_token: str) -> Any:
 def revoke_all_tokens(export_token: str) -> Any:
     """Revoke all tokens for a user."""
     config = get_config()
+    db = database.get_db(config)
     
     # Get user from export token
-    token_info = get_user_from_export_token(config, export_token)
+    token_info = db.get_user_from_export_token(export_token)
     if not token_info:
         return jsonify({"error": "Invalid management token"}), 404
     
@@ -1164,23 +1098,16 @@ def revoke_all_tokens(export_token: str) -> Any:
     
     try:
         # Revoke all access tokens for this user
-        user_tokens = list_user_tokens(config, user_email, provider)
+        user_tokens = db.list_user_tokens(user_email, provider)
         for token in user_tokens:
-            revoke_access_token(config, token, provider)
+            db.revoke_access_token(token, provider)
         
         # Revoke export token
-        revoke_export_token(config, export_token)
-        
+        db.revoke_export_token(export_token)
+
         # Delete user credentials
-        db = database.get_db(config)
-        conn = db.get_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute("DELETE FROM user_tokens WHERE user_email = %s AND provider = %s", (user_email, provider))
-            conn.commit()
-        finally:
-            db.return_connection(conn)
-        
+        db.delete_user_credentials(user_email, provider)
+
         return jsonify({
             "status": "success",
             "message": f"All tokens revoked for {user_email} ({provider})"
@@ -1199,9 +1126,10 @@ def revoke_token() -> Any:
             "error": "Authentication required",
             "solution": "Include 'Authorization: Bearer <access_token>' header"
         }), 401
-
+    
+    db = database.get_db(get_config())
     token = auth_header.split(' ', 1)[1]
-    token_info = get_provider_from_token(token)
+    token_info = db.get_provider_from_token(token)
     if not token_info:
         return jsonify({"error": "Invalid or expired token"}), 401
 
@@ -1221,7 +1149,7 @@ def revoke_token() -> Any:
             export_token_revoked = db.revoke_export_token(export_token)
         
         # Revoke the current access token (this also deletes user credentials via database.revoke_access_token)
-        access_token_revoked = revoke_access_token(config, token, provider=provider)
+        access_token_revoked = db.revoke_access_token(token, provider=provider)
         if not access_token_revoked:
             return jsonify({"error": "Invalid or expired token"}), 401
         

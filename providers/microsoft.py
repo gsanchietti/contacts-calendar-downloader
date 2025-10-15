@@ -8,7 +8,6 @@ rest of the code can remain provider-agnostic.
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 import time
-import os
 import requests
 import dateutil.parser
 from icalendar import Calendar, Event
@@ -28,7 +27,7 @@ DEFAULT_SCOPES = [
 ]
 
 
-def authenticate_microsoft(config, user_email: str, save_credentials_fn) -> Optional[Dict[str, Any]]:
+def authenticate_microsoft(config, user_email: str) -> Optional[Dict[str, Any]]:
     """Authenticate a specific user and return credentials dict for Microsoft Graph API.
     
     Args:
@@ -87,7 +86,7 @@ def authenticate_microsoft(config, user_email: str, save_credentials_fn) -> Opti
                 creds['refresh_token'] = token_result.get('refresh_token', creds.get('refresh_token'))
                 creds['expires_at'] = int(time.time()) + int(token_result.get('expires_in', 0))
                 # Save refreshed credentials
-                save_credentials_fn(config, user_email, creds, provider='microsoft')
+                db.save_user_credentials(user_email, creds, provider='microsoft')
             except Exception:
                 return None
     

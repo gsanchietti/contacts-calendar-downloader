@@ -592,6 +592,16 @@ class DatabaseBackend:
         finally:
             self.return_connection(conn)
 
+    def delete_user_credentials(self, user_email: str, provider: str = 'google') -> None:
+        """Delete user OAuth credentials."""
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM user_tokens WHERE user_email = %s AND provider = %s", (user_email, provider))
+                conn.commit()
+        finally:
+            self.return_connection(conn)
+
 
 # Global database instance
 _db_instance = None
