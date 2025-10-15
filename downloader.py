@@ -1248,8 +1248,8 @@ def revoke_token() -> Any:
 def health():
     """Health check endpoint."""
     config = get_config()
-    if not config.google_credentials_path.exists():
-        return jsonify({"status": "unhealthy", "error": "Credentials file not found"}), 500
+    if not config.google_credentials_path.exists() or not config.microsoft_credentials_path.exists():
+        return jsonify({"status": "unhealthy", "error": "One or more credential files not found"}), 500
     
     return jsonify({"status": "healthy"})
 
