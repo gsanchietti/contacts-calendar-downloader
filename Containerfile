@@ -11,6 +11,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
+# Create a non-root user for security
+RUN useradd --create-home -d /app --shell /bin/bash --uid 1000 downloader
+
+# Ensure pip --user scripts are on PATH for the downloader user
+ENV PATH=/app/.local/bin:${PATH}
+
+# Switch to non-root user
+USER downloader
+
 # Create app directory
 WORKDIR /app
 
@@ -18,17 +27,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Create a non-root user for security
-RUN useradd --create-home --shell /bin/bash --uid 1000 downloader
-
 # Copy application files
 COPY --chown=downloader:downloader . .
 
 # Create data directory for database and credentials
-RUN mkdir -p /app/data && chown downloader:downloader /app/data
+#RUN mkdir -p /app/data && chown downloader:downloader /app/
 
-# Switch to non-root user
-USER downloader
 
 # Expose the port the service runs on
 EXPOSE 8000
