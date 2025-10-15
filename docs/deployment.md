@@ -35,9 +35,9 @@ cd contacts-calendar-downloader
 # 2. Configure environment
 cp .env.example .env
 
-# Generate secure encryption key
-ENCRYPTION_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
-echo "ENCRYPTION_KEY=$ENCRYPTION_KEY" >> .env
+# Generate secure encryption key and PostgreSQL password, set them in .env
+ENCRYPTION_KEY=$(uuidgen | sha256sum | awk '{print $1}')
+POSTGRES_PASSWORD=$(uuidgen | sha1sum | awk '{print $1}')
 
 # Edit other settings
 vi .env  # Configure DOMAIN, ACME_EMAIL, etc.

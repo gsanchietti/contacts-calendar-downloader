@@ -64,8 +64,8 @@ services:
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
       
       # OAuth Configuration
-      - GOOGLE_OAUTH_REDIRECT_URI=${GOOGLE_OAUTH_REDIRECT_URI:-${PROTOCOL}://${HOST}:${PORT}/google/oauth2callback}
-      - MICROSOFT_OAUTH_REDIRECT_URI=${MICROSOFT_OAUTH_REDIRECT_URI:-${PROTOCOL}://${HOST}:${PORT}/microsoft/oauth2callback}
+      - GOOGLE_OAUTH_REDIRECT_URI=${GOOGLE_OAUTH_REDIRECT_URI}
+      - MICROSOFT_OAUTH_REDIRECT_URI=${MICROSOFT_OAUTH_REDIRECT_URI}
 
       # API Configuration
       - PERSON_FIELDS=${PERSON_FIELDS:-names,emailAddresses,phoneNumbers,addresses,organizations,birthdays}

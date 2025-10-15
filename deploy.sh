@@ -39,11 +39,12 @@ source .env
 if [ "$DOMAIN" == "localhost" ]; then
   echo "⚠️  DOMAIN is set to 'localhost'. For production, please set it to your actual domain name in .env file."
 else
-  echo "✅ DOMAIN is set to '$DOMAIN': forcing PROTOCOL to https"
-  GOOGLE_OAUTH_REDIRECT_URI="https://${DOMAIN}/google/oauth2callback"
-  MICROSOFT_OAUTH_REDIRECT_URI="https://${DOMAIN}/microsoft/oauth2callback"
-  export GOOGLE_OAUTH_REDIRECT_URI
-  export MICROSOFT_OAUTH_REDIRECT_URI
+  echo "✅ DOMAIN is set to '$DOMAIN': forcing PROTOCOL to https and PORT to 443"
+  export HOST="$DOMAIN"
+  export PROTOCOL="https"
+  export PORT=443
+  export GOOGLE_OAUTH_REDIRECT_URI="https://${DOMAIN}/google/oauth2callback"
+  export MICROSOFT_OAUTH_REDIRECT_URI="https://${DOMAIN}/microsoft/oauth2callback"
 fi
 
 
@@ -58,15 +59,10 @@ echo "✅ Configuration validated"
 # Check if services are already running
 if podman-compose ps | grep -q "Up"; then
     echo "⚠️  Services are already running"
-    read -p "Do you want to restart them? [y/N]: " -n 1 -r
     echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "🔄 Stopping existing services..."
-        podman-compose down
-    else
-        echo "ℹ️  Keeping existing services running"
-        exit 0
-    fi
+    echo "🔄 Stopping existing services..."
+    podman-compose down
+    echo "✅ Existing services stopped"
 fi
 
 # Generate Traefik configuration with environment variables
@@ -112,7 +108,7 @@ podman-compose up -d --build
 
 # Wait for services to be ready
 echo "⏳ Waiting for services to start..."
-sleep 10
+sleep 5
 
 # Check service health
 echo "🏥 Checking service health..."
@@ -135,15 +131,10 @@ done
 echo ""
 echo "🎉 Deployment completed successfully!"
 echo "=================================================="
-echo "🌍 Application URL: http://localhost:8000 (or https://$DOMAIN:8443 with reverse proxy)"
-echo "📊 Health Check: http://localhost:8000/health"
-echo "📈 Metrics: http://localhost:8000/metrics"
-
-echo ""
-echo "⚠️  Note: Rootless Podman uses non-privileged ports:"
-echo "   - HTTP: 8000 (instead of 80)"
-echo "   - HTTPS: 8443 (instead of 443)"
-echo "   - You may need to set up port forwarding or reverse proxy"
+echo "🌐 Application URL: https://$DOMAIN"
+echo "🔐 OAuth Redirect URIs:"
+echo "   Google: $GOOGLE_OAUTH_REDIRECT_URI"
+echo "   Microsoft: $MICROSOFT_OAUTH_REDIRECT_URI"
 
 echo ""
 echo "📋 Service Status:"
