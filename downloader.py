@@ -1192,7 +1192,7 @@ def revoke_all_tokens(export_token: str) -> Any:
 
 @app.route('/token/revoke', methods=['POST'])
 def revoke_token() -> Any:
-    """Revoke the current access token and associated user credentials for its provider."""
+    """Revoke the current access token, export tokens, and associated user credentials for its provider."""
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
         return jsonify({
@@ -1209,15 +1209,39 @@ def revoke_token() -> Any:
     provider = token_info['provider']
 
     config = get_config()
-    # Revoke access token and delete associated user_tokens row for that provider
-    success = revoke_access_token(config, token, provider=provider)
-    if success:
+    db = database.get_db(config)
+    
+    try:
+        # Get export token before revoking (for response details)
+        export_token = db.get_export_token(user_email, provider)
+        
+        # Revoke the export token if it exists
+        export_token_revoked = False
+        if export_token:
+            export_token_revoked = db.revoke_export_token(export_token)
+        
+        # Revoke the current access token (this also deletes user credentials via database.revoke_access_token)
+        access_token_revoked = revoke_access_token(config, token, provider=provider)
+        if not access_token_revoked:
+            return jsonify({"error": "Invalid or expired token"}), 401
+        
         return jsonify({
             "status": "success",
-            "message": f"Access token revoked for user: {user_email} (provider: {provider})"
+            "message": f"All tokens and credentials revoked for user: {user_email} (provider: {provider})",
+            "details": {
+                "access_token_revoked": True,
+                "export_token_revoked": export_token_revoked,
+                "credentials_deleted": True,
+                "user_email": user_email,
+                "provider": provider
+            }
         })
-    else:
-        return jsonify({"error": "Invalid or expired token"}), 401
+        
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to revoke tokens",
+            "details": str(e)
+        }), 500
 
 
 @app.route('/health')

@@ -54,33 +54,6 @@ This document covers the setup and configuration for Google and Microsoft OAuth 
    - From the Credentials page, click the download button (arrow down) next to your OAuth client
    - Save as `credentials.json` in your project root
 
-### Redirect URI Configuration
-
-**Local Development (Default):**
-```
-http://localhost:5000/google/oauth2callback
-```
-
-**Custom Port:**
-```bash
-export PORT=8000
-# Redirect URIs become: 
-# http://localhost:8000/google/oauth2callback
-# http://localhost:8000/microsoft/oauth2callback
-```
-
-**Production with HTTPS:**
-```bash
-export GOOGLE_OAUTH_REDIRECT_URI="https://your-production-domain.com/google/oauth2callback"
-export MICROSOFT_OAUTH_REDIRECT_URI="https://your-production-domain.com/microsoft/oauth2callback"
-```
-
-**Behind Reverse Proxy:**
-```bash
-export GOOGLE_OAUTH_REDIRECT_URI="https://api.example.com/google/oauth2callback"
-export MICROSOFT_OAUTH_REDIRECT_URI="https://api.example.com/microsoft/oauth2callback"
-```
-
 ## Microsoft Azure / Microsoft 365 Setup
 
 ### Prerequisites
@@ -100,7 +73,9 @@ export MICROSOFT_OAUTH_REDIRECT_URI="https://api.example.com/microsoft/oauth2cal
      - Single tenant (your organization only)
      - Multitenant (any Azure AD tenant)
      - Multitenant + personal Microsoft accounts
-   - **Redirect URI:** Web → `https://your-domain.com/microsoft/oauth2callback`
+   - **Redirect URI:** choose Web type, then add:
+     - For local development: `http://localhost:5000/google/oauth2callback`
+     - For production: `https://your-domain.com/google/oauth2callback`
    - Click **Register**
 
 3. **Configure API Permissions:**

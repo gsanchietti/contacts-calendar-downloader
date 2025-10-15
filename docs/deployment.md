@@ -119,9 +119,6 @@ docker run --rm --name contacts-service \
 # Basic health check
 curl https://your-domain.com/health
 # {"status": "healthy"}
-
-# Health check (credentials validation included)
-curl https://your-domain.com/health
 ```
 
 ### Prometheus Metrics
@@ -193,7 +190,9 @@ podman-compose logs contacts-calendar-downloader | grep ERROR
 
 ```bash
 # Full container backup
-podman volume export contacts-downloader_app-data > app-data-backup.tar
+podman volume export contacts-calendar-downloader_app-data > contacts-calendar-downloader_app-data.tar
+podman volume export contacts-calendar-downloader_traefik-letsencrypt > traefik-letsencrypt-backup.tar
+podman volume export contacts-calendar-downloader_postgres-data > postgres-data-backup.tar
 
 # Backup configuration
 tar czf config-backup.tar.gz \
@@ -210,13 +209,15 @@ tar czf config-backup.tar.gz \
 podman-compose down
 
 # 2. Restore volume
-podman volume import contacts-downloader_app-data app-data-backup.tar
+podman volume import contacts-calendar-downloader_app-data < contacts-calendar-downloader_app-data.tar
+podman volume import contacts-calendar-downloader_traefik-letsencrypt < traefik-letsencrypt-backup.tar
+podman volume import contacts-calendar-downloader_postgres-data < postgres-data-backup.tar
 
 # 3. Restore configuration
 tar xzf config-backup.tar.gz
 
 # 4. Restart services
-podman-compose up -d
+./deploy.sh
 
 # 5. Verify restoration
 curl https://your-domain.com/health
