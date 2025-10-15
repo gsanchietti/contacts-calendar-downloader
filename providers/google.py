@@ -26,7 +26,7 @@ def authenticate_google(config, user_email: str, save_credentials_fn) -> Optiona
     """Authenticate a specific user and return an authorized People API service.
     
     Args:
-        config: Configuration object with database path
+        config: Configuration object with database connection details
         user_email: Email of the user to authenticate
         save_credentials_fn: Callback function to save refreshed credentials
             (typically save_user_credentials from main app)
@@ -35,45 +35,17 @@ def authenticate_google(config, user_email: str, save_credentials_fn) -> Optiona
         Authenticated People API service object or None if authentication fails
     """
     # This needs to import at runtime to avoid circular imports
-    from pathlib import Path
-    import sqlite3
-    import pickle
-    from cryptography.fernet import Fernet
+    import database
     
-    # Load credentials from database
-    # We accept the config object and user_email, then load from DB ourselves
-    db_path = config.database_path if hasattr(config, 'database_path') else Path('contacts.db')
+    # Load credentials from database using the database's encryption methods
+    db = database.get_db(config)
+    creds_raw = db.load_user_credentials(user_email, provider='google')
     
-    # Get encryption cipher
-    encryption_key = os.environ.get('ENCRYPTION_KEY')
-    if not encryption_key:
-        encryption_key = 'default_key_change_this_in_production_1234567890='
-    cipher = Fernet(encryption_key.encode())
-    
-    try:
-        conn = sqlite3.connect(str(db_path))
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT token_data FROM user_tokens WHERE user_email = ? AND provider = ?",
-            (user_email, 'google')
-        )
-        row = cursor.fetchone()
-        conn.close()
-        
-        if not row:
-            return None
-            
-        encrypted_data = row['token_data']
-        decrypted = cipher.decrypt(encrypted_data)
-        creds_raw = pickle.loads(decrypted)
-    except Exception:
+    if not creds_raw:
         return None
 
     # creds_raw may be a google Credentials object (pickled) or a normalized dict
     creds: Optional[Credentials] = None
-    if creds_raw is None:
-        return None
 
     # If it's already a Credentials-like object (has .valid), use it
     if hasattr(creds_raw, 'valid'):

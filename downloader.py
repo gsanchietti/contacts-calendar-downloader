@@ -129,38 +129,8 @@ def get_config() -> Config:
     )
 
 
-def get_encryption_key() -> bytes:
-    """Get encryption key from environment variable or use default with warning."""
-    encryption_key = os.environ.get("ENCRYPTION_KEY")
-    
-    if not encryption_key:
-        print("⚠️  WARNING: ENCRYPTION_KEY not set, using default 'secret' key. This is NOT secure for production use!")
-        ENCRYPTION_WARNINGS_TOTAL.inc()
-        encryption_key = "secret"
-    
-    # Create a Fernet key from the provided key
-    # Hash the key to ensure it's exactly 32 bytes
-    key_hash = hashlib.sha256(encryption_key.encode()).digest()
-    # Fernet requires base64-encoded 32-byte key
-    fernet_key = base64.urlsafe_b64encode(key_hash)
-    return fernet_key
-
-
-def get_cipher() -> Fernet:
-    """Get Fernet cipher instance."""
-    return Fernet(get_encryption_key())
-
-
-def encrypt_data(data: bytes) -> bytes:
-    """Encrypt data using AES encryption."""
-    cipher = get_cipher()
-    return cipher.encrypt(data)
-
-
-def decrypt_data(encrypted_data: bytes) -> bytes:
-    """Decrypt data using AES encryption."""
-    cipher = get_cipher()
-    return cipher.decrypt(encrypted_data)
+# Encryption functions are now handled by database.py
+# These functions are kept for backward compatibility but are no longer used
 
 
 def update_metrics(config: Config) -> None:
@@ -429,6 +399,11 @@ def generate_access_token() -> str:
     """Generate a secure access token."""
     return secrets.token_urlsafe(32)
 
+def get_base_url(config: Config) -> str:
+    """Get the base URL for the application."""
+    if config.port == 443 and config.protocol == 'https':
+        return f"{config.protocol}://{config.host}"
+    return f"{config.protocol}://{config.host}:{config.port}"
 
 def authenticate_request() -> Optional[str]:
     """Authenticate the current request and return user email if valid."""
@@ -565,7 +540,7 @@ def auth():
                                  authorization_url=authorization_url,
                                  state=state,
                                  redirect_uri=redirect_uri,
-                                 base_url=f"{config.protocol}://{config.host}:{config.port}",
+                                 base_url=get_base_url(config),
                                  countdown=5,
                                  troubleshooting=payload['troubleshooting'],
                                  provider=provider)
@@ -643,7 +618,7 @@ def google_oauth2callback():
                 "next_steps": "Use the access_token in Authorization header: 'Bearer <token>' to call /download/contacts"
             })
         else:
-            return render_template('oauth_success.html', user_email=user_email, access_token=access_token, export_token=export_token, base_url=f"{config.protocol}://{config.host}:{config.port}", provider='google')
+            return render_template('oauth_success.html', user_email=user_email, access_token=access_token, export_token=export_token, base_url=get_base_url(config), provider='google')
 
     except Exception as e:
         error_msg = str(e)
@@ -754,7 +729,7 @@ def microsoft_oauth2callback():
                 "next_steps": "Use the access_token in Authorization header: 'Bearer <token>' to call /download/contacts"
             })
         else:
-            return render_template('oauth_success.html', user_email=user_email, access_token=access_token, export_token=export_token, base_url=f"{config.protocol}://{config.host}:{config.port}", provider='microsoft')
+            return render_template('oauth_success.html', user_email=user_email, access_token=access_token, export_token=export_token, base_url=get_base_url(config), provider='microsoft')
 
     except Exception as e:
         error_msg = str(e)
@@ -859,38 +834,12 @@ def download_contacts_endpoint() -> Any:
             return jsonify({"error": str(e)}), 500
 
     elif provider == 'microsoft':
-        # Load microsoft credentials dict
-        creds = load_user_credentials(config, user_email, provider='microsoft')
+        creds = microsoft_provider.authenticate_microsoft(config, user_email, save_user_credentials)
         if not creds:
             return jsonify({
-                "error": f"User '{user_email}' token not found for Microsoft",
+                "error": f"User '{user_email}' token has expired or is invalid",
                 "solution": "Re-authenticate by visiting /auth?provider=microsoft to get a new access token"
             }), 401
-
-        # Refresh token if expired
-        if creds.get('expires_at') and time.time() > creds['expires_at'] and creds.get('refresh_token'):
-            # Attempt refresh via token endpoint
-            ms_creds_path = config.microsoft_credentials_path
-            if ms_creds_path.exists():
-                ms_creds = json.loads(ms_creds_path.read_text())
-                token_url = f"https://login.microsoftonline.com/{ms_creds.get('tenant','common')}/oauth2/v2.0/token"
-                data = {
-                    'client_id': ms_creds.get('client_id'),
-                    'client_secret': ms_creds.get('client_secret'),
-                    'grant_type': 'refresh_token',
-                    'refresh_token': creds.get('refresh_token'),
-                    'scope': ' '.join(creds.get('scopes', []))
-                }
-                try:
-                    resp = requests.post(token_url, data=data, timeout=10)
-                    resp.raise_for_status()
-                    token_result = resp.json()
-                    creds['access_token'] = token_result.get('access_token')
-                    creds['refresh_token'] = token_result.get('refresh_token', creds.get('refresh_token'))
-                    creds['expires_at'] = int(time.time()) + int(token_result.get('expires_in', 0))
-                    save_user_credentials(config, user_email, creds, provider='microsoft')
-                except Exception:
-                    pass
 
         try:
             contacts = microsoft_provider.fetch_contacts(creds, page_size=config.page_size)
@@ -1003,7 +952,7 @@ def download_calendar() -> Any:
             calendar_ics = google_provider.fetch_google_calendar(credentials)
 
         elif provider == 'microsoft':
-            creds = load_user_credentials(config, user_email, provider='microsoft')
+            creds = microsoft_provider.authenticate_microsoft(config, user_email, save_user_credentials)
             if not creds:
                 return jsonify({
                     "error": "User not authenticated with Microsoft",
@@ -1013,30 +962,6 @@ def download_calendar() -> Any:
                         "solution": "Complete OAuth flow first by visiting /auth?provider=microsoft"
                     }
                 }), 400
-
-            # Try refresh if expired
-            if creds.get('expires_at') and time.time() > creds['expires_at'] and creds.get('refresh_token'):
-                ms_creds_path = config.microsoft_credentials_path
-                if ms_creds_path.exists():
-                    ms_creds = json.loads(ms_creds_path.read_text())
-                    token_url = f"https://login.microsoftonline.com/{ms_creds.get('tenant','common')}/oauth2/v2.0/token"
-                    data = {
-                        'client_id': ms_creds.get('client_id'),
-                        'client_secret': ms_creds.get('client_secret'),
-                        'grant_type': 'refresh_token',
-                        'refresh_token': creds.get('refresh_token'),
-                        'scope': ' '.join(creds.get('scopes', []))
-                    }
-                    try:
-                        resp = requests.post(token_url, data=data, timeout=10)
-                        resp.raise_for_status()
-                        token_result = resp.json()
-                        creds['access_token'] = token_result.get('access_token')
-                        creds['refresh_token'] = token_result.get('refresh_token', creds.get('refresh_token'))
-                        creds['expires_at'] = int(time.time()) + int(token_result.get('expires_in', 0))
-                        save_user_credentials(config, user_email, creds, provider='microsoft')
-                    except Exception:
-                        pass
 
             calendar_ics = microsoft_provider.fetch_microsoft_calendar(creds)
 
@@ -1073,22 +998,27 @@ def download_calendar() -> Any:
 @app.route('/export/contacts/<export_token>.csv')
 def export_contacts_csv(export_token: str) -> Any:
     """Export contacts as CSV using permanent export token."""
+    import sys
     config = get_config()
     
-    # Get user from export token
-    token_info = get_user_from_export_token(config, export_token)
-    if not token_info:
-        return jsonify({"error": "Invalid export token"}), 404
-    
-    user_email = token_info['user_email']
-    provider = token_info['provider']
-    
     try:
+        # Get user from export token
+        token_info = get_user_from_export_token(config, export_token)
+        if not token_info:
+            return jsonify({"error": "Invalid export token"}), 404
+        
+        user_email = token_info['user_email']
+        provider = token_info['provider']
+        
+        print(f"[DEBUG] Processing export for user: {user_email}, provider: {provider}", file=sys.stderr, flush=True)
+        
         if provider == 'google':
+            print(f"[DEBUG] Authenticating Google user...", file=sys.stderr, flush=True)
             service = google_provider.authenticate_google(config, user_email, save_user_credentials)
             if not service:
                 return jsonify({"error": "Authentication failed"}), 401
             
+            print(f"[DEBUG] Downloading Google contacts...", file=sys.stderr, flush=True)
             contacts = google_provider.download_contacts(service, page_size=config.page_size, person_fields=config.person_fields)
             if not contacts:
                 return jsonify({"error": "No contacts found"}), 404
@@ -1096,35 +1026,12 @@ def export_contacts_csv(export_token: str) -> Any:
             rows = [google_provider.extract_contact_row(person) for person in contacts]
             
         elif provider == 'microsoft':
-            creds = load_user_credentials(config, user_email, provider='microsoft')
+            print(f"[DEBUG] Authenticating Microsoft user...", file=sys.stderr, flush=True)
+            creds = microsoft_provider.authenticate_microsoft(config, user_email, save_user_credentials)
             if not creds:
                 return jsonify({"error": "Authentication failed"}), 401
             
-            # Refresh token if expired
-            if creds.get('expires_at') and time.time() > creds['expires_at'] and creds.get('refresh_token'):
-                # Token refresh logic (same as in download_contacts_endpoint)
-                ms_creds_path = config.microsoft_credentials_path
-                if ms_creds_path.exists():
-                    ms_creds = json.loads(ms_creds_path.read_text())
-                    token_url = f"https://login.microsoftonline.com/{ms_creds.get('tenant','common')}/oauth2/v2.0/token"
-                    data = {
-                        'client_id': ms_creds.get('client_id'),
-                        'client_secret': ms_creds.get('client_secret'),
-                        'grant_type': 'refresh_token',
-                        'refresh_token': creds.get('refresh_token'),
-                        'scope': ' '.join(creds.get('scopes', []))
-                    }
-                    try:
-                        resp = requests.post(token_url, data=data, timeout=10)
-                        resp.raise_for_status()
-                        token_result = resp.json()
-                        creds['access_token'] = token_result.get('access_token')
-                        creds['refresh_token'] = token_result.get('refresh_token', creds.get('refresh_token'))
-                        creds['expires_at'] = int(time.time()) + int(token_result.get('expires_in', 0))
-                        save_user_credentials(config, user_email, creds, provider='microsoft')
-                    except Exception:
-                        pass
-            
+            print(f"[DEBUG] Downloading Microsoft contacts...", file=sys.stderr, flush=True)
             contacts = microsoft_provider.fetch_contacts(creds, page_size=config.page_size)
             if not contacts:
                 return jsonify({"error": "No contacts found"}), 404
@@ -1154,6 +1061,9 @@ def export_contacts_csv(export_token: str) -> Any:
         return output.getvalue(), 200, {'Content-Type': 'text/csv'}
         
     except Exception as e:
+        print(f"[ERROR] Export failed: {e}", file=sys.stderr, flush=True)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         return jsonify({"error": str(e)}), 500
 
 
@@ -1183,33 +1093,9 @@ def export_calendar_ics(export_token: str) -> Any:
             calendar_ics = google_provider.fetch_google_calendar(credentials)
             
         elif provider == 'microsoft':
-            creds = load_user_credentials(config, user_email, provider='microsoft')
+            creds = microsoft_provider.authenticate_microsoft(config, user_email, save_user_credentials)
             if not creds:
                 return jsonify({"error": "Authentication failed"}), 401
-            
-            # Token refresh logic (same as above)
-            if creds.get('expires_at') and time.time() > creds['expires_at'] and creds.get('refresh_token'):
-                ms_creds_path = config.microsoft_credentials_path
-                if ms_creds_path.exists():
-                    ms_creds = json.loads(ms_creds_path.read_text())
-                    token_url = f"https://login.microsoftonline.com/{ms_creds.get('tenant','common')}/oauth2/v2.0/token"
-                    data = {
-                        'client_id': ms_creds.get('client_id'),
-                        'client_secret': ms_creds.get('client_secret'),
-                        'grant_type': 'refresh_token',
-                        'refresh_token': creds.get('refresh_token'),
-                        'scope': ' '.join(creds.get('scopes', []))
-                    }
-                    try:
-                        resp = requests.post(token_url, data=data, timeout=10)
-                        resp.raise_for_status()
-                        token_result = resp.json()
-                        creds['access_token'] = token_result.get('access_token')
-                        creds['refresh_token'] = token_result.get('refresh_token', creds.get('refresh_token'))
-                        creds['expires_at'] = int(time.time()) + int(token_result.get('expires_in', 0))
-                        save_user_credentials(config, user_email, creds, provider='microsoft')
-                    except Exception:
-                        pass
             
             calendar_ics = microsoft_provider.fetch_microsoft_calendar(creds)
             
@@ -1243,7 +1129,7 @@ def manage_data(export_token: str) -> Any:
     provider = token_info['provider']
     
     # Get host for URL generation
-    base_url = f"{config.protocol}://{config.host}:{config.port}"
+    base_url = get_base_url(config)
     
     # Build export URLs
     contacts_url = f"{base_url}/export/contacts/{export_token}.csv"

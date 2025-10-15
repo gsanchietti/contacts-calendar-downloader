@@ -36,7 +36,7 @@ cd contacts-calendar-downloader
 cp .env.example .env
 
 # Generate secure encryption key and PostgreSQL password, set them in .env
-ENCRYPTION_KEY=$(uuidgen | sha256sum | awk '{print $1}')
+ENCRYPTION_KEY=$(openssl rand 32 | base64 | tr '+/' '-_' | tr -d '\n')
 POSTGRES_PASSWORD=$(uuidgen | sha1sum | awk '{print $1}')
 
 # Edit other settings

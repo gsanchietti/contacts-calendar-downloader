@@ -8,6 +8,7 @@ rest of the code can remain provider-agnostic.
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 import time
+import os
 import requests
 import dateutil.parser
 from icalendar import Calendar, Event
@@ -25,6 +26,76 @@ DEFAULT_SCOPES = [
     "Contacts.Read",
     "Calendars.Read",
 ]
+
+
+def authenticate_microsoft(config, user_email: str, save_credentials_fn) -> Optional[Dict[str, Any]]:
+    """Authenticate a specific user and return credentials dict for Microsoft Graph API.
+    
+    Args:
+        config: Configuration object with database connection details
+        user_email: Email of the user to authenticate
+        save_credentials_fn: Callback function to save refreshed credentials
+            (typically save_user_credentials from main app)
+    
+    Returns:
+        Credentials dict with access_token or None if authentication fails
+    """
+    # Import database module at runtime to avoid circular imports
+    import database
+    import sys
+    
+    print(f"[DEBUG] Authenticating Microsoft user: {user_email}", file=sys.stderr, flush=True)
+    
+    try:
+        # Load credentials from database using centralized encryption methods
+        db = database.get_db(config)
+        creds = db.load_user_credentials(user_email, provider='microsoft')
+        
+        print(f"[DEBUG] Loaded Microsoft credentials for {user_email}: {creds is not None}", file=sys.stderr, flush=True)
+        
+        if not creds:
+            print(f"[DEBUG] No credentials found for {user_email}", file=sys.stderr, flush=True)
+            return None
+    except Exception as e:
+        print(f"❌ Failed to load Microsoft credentials for {user_email}: {e}", file=sys.stderr, flush=True)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return None
+    
+    if not creds:
+        return None
+    
+    # Check if token needs refresh
+    if creds.get('expires_at') and time.time() > creds['expires_at'] and creds.get('refresh_token'):
+        # Attempt token refresh
+        ms_creds_path = config.microsoft_credentials_path
+        if ms_creds_path.exists():
+            ms_creds = json.loads(ms_creds_path.read_text())
+            token_url = f"https://login.microsoftonline.com/{ms_creds.get('tenant', 'common')}/oauth2/v2.0/token"
+            data = {
+                'client_id': ms_creds.get('client_id'),
+                'client_secret': ms_creds.get('client_secret'),
+                'grant_type': 'refresh_token',
+                'refresh_token': creds.get('refresh_token'),
+                'scope': ' '.join(creds.get('scopes', []))
+            }
+            try:
+                resp = requests.post(token_url, data=data, timeout=10)
+                resp.raise_for_status()
+                token_result = resp.json()
+                creds['access_token'] = token_result.get('access_token')
+                creds['refresh_token'] = token_result.get('refresh_token', creds.get('refresh_token'))
+                creds['expires_at'] = int(time.time()) + int(token_result.get('expires_in', 0))
+                # Save refreshed credentials
+                save_credentials_fn(config, user_email, creds, provider='microsoft')
+            except Exception:
+                return None
+    
+    # Verify we have a valid access token
+    if not creds.get('access_token'):
+        return None
+    
+    return creds
 
 
 def _graph_get(url: str, access_token: str, params: Optional[Dict] = None) -> Dict:
