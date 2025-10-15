@@ -7,7 +7,7 @@ Access your data in CSV, JSON, or ICS formats via a simple public URL (or API en
 
 ✅ **Multi-Provider Support** - Google and Microsoft (Outlook/Office 365) authentication  
 ✅ **Multi-Tenant Architecture** - Multiple users can authenticate independently  
-✅ **SQLite Database Storage** - Secure token and credentials storage with AES-256 encryption  
+✅ **PostgreSQL Database** - Secure token and credentials storage with AES-256 encryption  
 ✅ **Contacts & Calendar Export** - Download data in CSV, JSON, or ICS formats using a public URL or API endpoint 
 ✅ **Bearer Token Authentication** - Secure API access with JWT-like tokens  
 ✅ **Auto Token Refresh** - Automatic credential renewal  
@@ -17,28 +17,47 @@ Access your data in CSV, JSON, or ICS formats via a simple public URL (or API en
 
 ## Quick Start
 
-Prerequisites
+### Prerequisites
 
 - Python 3.9 or newer
+- PostgreSQL 12 or newer
 - OAuth 2.0 credentials from Google Cloud and/or Microsoft Azure
 - See [Provider Setup Guide](docs/providers.md) for detailed configuration instructions
+
+### Local Development Setup
 
 ```bash
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Configure Google and Microsoft credentials, save the JSON files locally
+# 2. Set up PostgreSQL database
+# Option A: Using Docker Compose (recommended)
+docker-compose up postgres -d
+
+# Option B: Using local PostgreSQL installation
+createdb contacts_calendar_downloader
+# Or using psql:
+# psql -U postgres -c "CREATE DATABASE contacts_calendar_downloader;"
+
+# 3. Configure environment variables
+export POSTGRES_HOST=localhost
+export POSTGRES_PORT=5432
+export POSTGRES_DB=contacts_calendar_downloader
+export POSTGRES_USER=postgres
+export POSTGRES_PASSWORD=your_secure_password
+
+# 4. Configure Google and Microsoft credentials, save the JSON files locally
 # See the Provider Setup documentation for details
 export GOOGLE_CREDENTIALS=./credentials/google.json
 export MICROSOFT_CREDENTIALS=./credentials/microsoft.json
 
-# 3. Start the service
+# 5. Start the service
 python downloader.py
 
-# 4. Visit the web interface
+# 6. Visit the web interface
 # Open http://localhost:5000/ in your browser
 
-# 5. Or use the API directly
+# 7. Or use the API directly
 curl http://localhost:5000/auth?provider=google | jq -r '.authorization_url'
 # Open the URL, authorize, then use the access token to download data
 ```

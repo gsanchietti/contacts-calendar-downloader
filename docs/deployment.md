@@ -72,16 +72,16 @@ For custom deployment scenarios or different container runtimes.
 # Build image
 podman build -t contacts-calendar-downloader .
 
-# Create persistent volume
-podman volume create contacts-data
-
-# Run with production settings
+# Run with production settings (requires external PostgreSQL)
 podman run --rm --name contacts-service \
   -p 8443:8443 \
-  -v contacts-data:/app/data:z \
   -v ./credentials.json:/app/credentials.json:ro,z \
   -e GOOGLE_CREDENTIALS=/app/credentials.json \
-  -e DATABASE=/app/data/credentials.db \
+  -e POSTGRES_HOST=your-postgres-host \
+  -e POSTGRES_PORT=5432 \
+  -e POSTGRES_DB=downloader \
+  -e POSTGRES_USER=downloader \
+  -e POSTGRES_PASSWORD=your-secure-password \
   -e ENCRYPTION_KEY="$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" \
   -e GOOGLE_OAUTH_REDIRECT_URI="https://your-domain.com/google/oauth2callback" \
   -e MICROSOFT_OAUTH_REDIRECT_URI="https://your-domain.com/microsoft/oauth2callback" \
@@ -94,18 +94,23 @@ podman run --rm --name contacts-service \
 # Build image
 docker build -t contacts-calendar-downloader .
 
-# Run container
+# Run container (requires external PostgreSQL)
 docker run --rm --name contacts-service \
   -p 8443:8443 \
-  -v contacts-data:/app/data \
   -v ./credentials.json:/app/credentials.json:ro \
   -e GOOGLE_CREDENTIALS=/app/credentials.json \
-  -e DATABASE=/app/data/credentials.db \
+  -e POSTGRES_HOST=your-postgres-host \
+  -e POSTGRES_PORT=5432 \
+  -e POSTGRES_DB=contacts_calendar_downloader \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=your-secure-password \
   -e ENCRYPTION_KEY="$(openssl rand -base64 32)" \
   -e GOOGLE_OAUTH_REDIRECT_URI="https://your-domain.com/google/oauth2callback" \
   -e MICROSOFT_OAUTH_REDIRECT_URI="https://your-domain.com/microsoft/oauth2callback" \
   contacts-calendar-downloader
 ```
+
+**Note:** These examples require an external PostgreSQL server. For a complete production setup with PostgreSQL included, use the Docker Compose configuration (see Quick Production Deploy section above).
 ## Monitoring & Observability
 
 ### Health Checks

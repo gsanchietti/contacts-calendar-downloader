@@ -3,7 +3,7 @@
 
 This service allows multiple users to authenticate and download their contacts and calendar
 events from Google and Microsoft providers. Each user gets their own credentials stored 
-securely in an encrypted SQLite database with provider-aware token management.
+securely in an encrypted PostgreSQL database with provider-aware token management.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ import json
 import os
 import pickle
 import secrets
-import sqlite3
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +32,7 @@ import providers
 import requests
 from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from datetime import datetime, timezone
+import database
 
 # Allow HTTP for local development (disable HTTPS requirement)
 # WARNING: Only use this for local development, never in production!
@@ -109,7 +109,6 @@ class Config:
 
     google_credentials_path: Path
     microsoft_credentials_path: Path  # Microsoft OAuth credentials
-    database_path: Path  # SQLite database for tokens and access tokens
     person_fields: str
     page_size: int
     host: str
@@ -122,7 +121,6 @@ def get_config() -> Config:
     return Config(
         google_credentials_path=Path(os.environ.get("GOOGLE_CREDENTIALS", "credentials/google.json")),
         microsoft_credentials_path=Path(os.environ.get("MICROSOFT_CREDENTIALS", "credentials/microsoft.json")),
-        database_path=Path(os.environ.get("DATABASE", "downloader.db")),
         person_fields=os.environ.get("PERSON_FIELDS", DEFAULT_PERSON_FIELDS),
         page_size=int(os.environ.get("PAGE_SIZE", "1000")),
         host=os.environ.get("HOST", "localhost"),
@@ -168,21 +166,18 @@ def decrypt_data(encrypted_data: bytes) -> bytes:
 def update_metrics(config: Config) -> None:
     """Update Prometheus metrics with current database state."""
     try:
-        with get_database_connection(config) as conn:
-            cursor = conn.cursor()
-            
-            # Count registered users
-            cursor.execute("SELECT COUNT(*) FROM user_tokens")
-            user_count = cursor.fetchone()[0]
-            REGISTERED_USERS.set(user_count)
-            
-            # Count active access tokens  
-            cursor.execute("SELECT COUNT(*) FROM access_tokens")
-            token_count = cursor.fetchone()[0]
-            ACTIVE_TOKENS.set(token_count)
+        db = database.get_db(config)
         
-        # Get database file size
-        db_size = config.database_path.stat().st_size if config.database_path.exists() else 0
+        # Count registered users
+        user_count = db.get_user_count()
+        REGISTERED_USERS.set(user_count)
+        
+        # Count active access tokens  
+        token_count = db.get_active_token_count()
+        ACTIVE_TOKENS.set(token_count)
+        
+        # Get database size
+        db_size = db.get_database_size()
         DATABASE_SIZE_BYTES.set(db_size)
         
     except Exception as e:
@@ -191,203 +186,54 @@ def update_metrics(config: Config) -> None:
 
 
 def init_database(config: Config) -> None:
-    """Initialize SQLite database with required tables."""
-    with sqlite3.connect(config.database_path) as conn:
-        cursor = conn.cursor()
-        
-        # Create table for OAuth tokens (support multiple providers)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_tokens (
-                user_email TEXT,
-                provider TEXT DEFAULT 'google',
-                user_hash TEXT NOT NULL,
-                token_data BLOB NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (user_email, provider)
-            )
-        ''')
-        
-        # Create table for access tokens (support multiple providers)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS access_tokens (
-                access_token TEXT,
-                provider TEXT DEFAULT 'google',
-                user_email TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (access_token, provider),
-                FOREIGN KEY (user_email, provider) REFERENCES user_tokens (user_email, provider) ON DELETE CASCADE
-            )
-        ''')
-        
-        # Create table for OAuth flows (supporting provider identification)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS oauth_flows (
-                state TEXT PRIMARY KEY,
-                provider TEXT DEFAULT 'google',
-                credentials_path TEXT NOT NULL,
-                scopes TEXT NOT NULL,
-                redirect_uri TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Create index for faster lookups
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_access_tokens_user_email 
-            ON access_tokens (user_email)
-        ''')
-        
-        # Create index for OAuth flows cleanup
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_oauth_flows_created_at 
-            ON oauth_flows (created_at)
-        ''')
-        
-        # Create table for permanent export tokens
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS export_tokens (
-                export_token TEXT PRIMARY KEY,
-                user_email TEXT NOT NULL,
-                provider TEXT DEFAULT 'google',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_email, provider) REFERENCES user_tokens (user_email, provider) ON DELETE CASCADE
-            )
-        ''')
-        
-        # Create index for export tokens
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_export_tokens_user_email 
-            ON export_tokens (user_email, provider)
-        ''')
-        
-        conn.commit()
-
-
-def get_database_connection(config: Config) -> sqlite3.Connection:
-    """Get database connection with proper configuration for concurrency.
-
-    Ensure the database parent directory exists and try a best-effort chown so
-    a non-root container user can write the database file. Use WAL mode for
-    better concurrent access with multiple Gunicorn workers.
-    """
-    db_path = Path(config.database_path)
-    db_dir = db_path.parent
-
-    # Create parent directory if missing
-    try:
-        db_dir.mkdir(parents=True, exist_ok=True)
-    except Exception:
-        # If this fails, let sqlite raise a clear error on connect
-        pass
-
-    # Best-effort chown to current uid/gid. Ignore permission errors.
-    try:
-        uid = os.getuid()
-        gid = os.getgid()
-        os.chown(db_dir, uid, gid)
-    except PermissionError:
-        pass
-    except Exception:
-        pass
-
-    conn = sqlite3.connect(str(db_path), timeout=30, check_same_thread=False)
-    conn.row_factory = sqlite3.Row  # Enable column access by name
-    
-    # Enable WAL mode for better concurrency (multiple readers, single writer)
-    try:
-        conn.execute("PRAGMA journal_mode=WAL")
-        # Set busy timeout for better handling of concurrent writes
-        conn.execute("PRAGMA busy_timeout=30000")  # 30 seconds
-        # Enable foreign keys
-        conn.execute("PRAGMA foreign_keys=ON")
-    except Exception as e:
-        print(f"Warning: Failed to set SQLite pragmas: {e}")
-    
-    return conn
+    """Initialize PostgreSQL database with required tables."""
+    db = database.get_db(config)
+    db.init_database()
+    print(f"✅ PostgreSQL database initialized successfully")
 
 
 def get_user_provider(config: Config, user_email: str) -> str:
     """Return the provider associated with the given user_email, default to 'google'."""
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT provider FROM user_tokens WHERE user_email = ? LIMIT 1", (user_email,))
-        row = cursor.fetchone()
-        if row and row[0]:
-            return row[0]
-    return 'google'
+    db = database.get_db(config)
+    return db.get_user_provider(user_email)
 
 
 def store_oauth_flow(config: Config, state: str, flow_info: Dict[str, Any]) -> None:
-    """Store OAuth flow configuration in database.
-
-    flow_info is a dict that must contain: provider, credentials_path (optional), scopes (list), redirect_uri
-    """
-    provider = flow_info.get('provider', 'google')
-    scopes_json = json.dumps(flow_info.get('scopes', DEFAULT_SCOPES))
-    credentials_path = flow_info.get('credentials_path') or str(config.google_credentials_path)
-    redirect_uri = flow_info.get('redirect_uri', get_redirect_uri(provider))
-
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        # Clean up expired flows (older than 10 minutes)
-        cursor.execute(
-            "DELETE FROM oauth_flows WHERE created_at < datetime('now', '-10 minutes')"
-        )
-
-        # Store new flow
-        cursor.execute(
-            "INSERT OR REPLACE INTO oauth_flows (state, provider, credentials_path, scopes, redirect_uri) VALUES (?, ?, ?, ?, ?)",
-            (state, provider, credentials_path, scopes_json, redirect_uri)
-        )
-        conn.commit()
+    """Store OAuth flow configuration in database."""
+    db = database.get_db(config)
+    db.store_oauth_flow(state, flow_info)
 
 
 def get_oauth_flow(config: Config, state: str, provider: str = 'google') -> Optional[Flow]:
     """Retrieve OAuth flow from database and recreate Flow object."""
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT credentials_path, scopes, redirect_uri FROM oauth_flows WHERE state = ? AND provider = ? AND created_at > datetime('now', '-10 minutes')",
-            (state, provider)
+    db = database.get_db(config)
+    row = db.get_oauth_flow_row(state)
+    
+    if row and row.get('provider') == provider:
+        scopes = json.loads(row["scopes"])
+        
+        # Recreate the flow from stored configuration
+        flow = Flow.from_client_secrets_file(
+            row["credentials_path"],
+            scopes=scopes,
+            redirect_uri=row["redirect_uri"],
+            state=state
         )
-        row = cursor.fetchone()
-        
-        if row:
-            scopes = json.loads(row["scopes"])
-            
-            # Recreate the flow from stored configuration
-            flow = Flow.from_client_secrets_file(
-                row["credentials_path"],
-                scopes=scopes,
-                redirect_uri=row["redirect_uri"],
-                state=state
-            )
-            return flow
-        
-        return None
+        return flow
+    
+    return None
 
 
-def get_oauth_flow_row(config: Config, state: str) -> Optional[sqlite3.Row]:
+def get_oauth_flow_row(config: Config, state: str) -> Optional[Dict[str, Any]]:
     """Return the raw oauth_flows DB row for a given state (if recent)."""
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT state, provider, credentials_path, scopes, redirect_uri FROM oauth_flows WHERE state = ? AND created_at > datetime('now', '-10 minutes')",
-            (state,)
-        )
-        return cursor.fetchone()
-
-
-
+    db = database.get_db(config)
+    return db.get_oauth_flow_row(state)
 
 
 def delete_oauth_flow(config: Config, state: str) -> None:
     """Delete OAuth flow from database."""
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM oauth_flows WHERE state = ?", (state,))
-        conn.commit()
+    db = database.get_db(config)
+    db.delete_oauth_flow(state)
 
 
 def get_redirect_uri(provider: str = 'google') -> str:
@@ -401,16 +247,11 @@ def get_redirect_uri(provider: str = 'google') -> str:
     if redirect_uri:
         return redirect_uri
     
-    # Always use environment variables for consistent URI generation
-    host = os.environ.get("HOST", "localhost")
-    port = os.environ.get("PORT", "5000")
-    protocol = os.environ.get("PROTOCOL", "http")
-    
-    # Include port only if it's not the default for the protocol
-    if (protocol == "http" and port == "80") or (protocol == "https" and port == "443"):
-        base_uri = f"{protocol}://{host}"
+    config = get_config()
+    if (config.protocol == 'https' and config.port == 443):
+        base_uri = f"{config.protocol}://{config.host}"
     else:
-        base_uri = f"{protocol}://{host}:{port}"
+        base_uri = f"{config.protocol}://{config.host}:{config.port}"
     
     if provider == 'microsoft':
         return f"{base_uri}/microsoft/oauth2callback"
@@ -420,147 +261,40 @@ def get_redirect_uri(provider: str = 'google') -> str:
 
 def save_access_token(config: Config, token: str, user_email: str, provider: str = 'google') -> None:
     """Save access token with encryption to database."""
-    # Encrypt only the access token, keep user_email unencrypted for queries
-    encrypted_token = encrypt_data(token.encode())
-    
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT OR REPLACE INTO access_tokens (access_token, provider, user_email) VALUES (?, ?, ?)",
-            (encrypted_token, provider, user_email)
-        )
-        conn.commit()
+    db = database.get_db(config)
+    db.create_access_token(token, user_email, provider)
 
 
 def get_user_from_token(token: str, provider: Optional[str] = None) -> Optional[str]:
     """Get user email from encrypted access token stored in database."""
     config = get_config()
-    
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        if provider:
-            cursor.execute(
-                "SELECT access_token, user_email FROM access_tokens WHERE provider = ?",
-                (provider,)
-            )
-        else:
-            cursor.execute("SELECT access_token, user_email FROM access_tokens")
-        rows = cursor.fetchall()
-
-        for row in rows:
-            try:
-                # Decrypt the stored token and compare with provided token
-                decrypted_token = decrypt_data(row["access_token"]).decode()
-                if decrypted_token == token:
-                    # Return the user email (unencrypted)
-                    return row["user_email"]
-            except Exception:
-                # Skip invalid/corrupted tokens
-                continue
-
-        return None
+    db = database.get_db(config)
+    return db.get_user_from_token(token, provider)
 
 
 def get_provider_from_token(token: str) -> Optional[Dict[str, str]]:
-    """Return a dict with 'user_email' and 'provider' for the given access token, or None.
-
-    This searches the access_tokens table across providers and decrypts stored tokens to find
-    the matching row.
-    """
+    """Return a dict with 'user_email' and 'provider' for the given access token, or None."""
     config = get_config()
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT access_token, user_email, provider, rowid FROM access_tokens")
-        rows = cursor.fetchall()
-
-        for row in rows:
-            try:
-                decrypted_token = decrypt_data(row[0]).decode()
-                if decrypted_token == token:
-                    return {"user_email": row[1], "provider": row[2]}
-            except Exception:
-                continue
-
-    return None
+    db = database.get_db(config)
+    return db.get_provider_from_token(token)
 
 
 def revoke_access_token(config: Config, token: str, provider: str = 'google') -> bool:
     """Revoke encrypted access token by deleting it from database."""
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        if provider:
-            cursor.execute(
-                "SELECT rowid, access_token FROM access_tokens WHERE provider = ?",
-                (provider,)
-            )
-        else:
-            cursor.execute("SELECT rowid, access_token FROM access_tokens")
-        rows = cursor.fetchall()
-
-        for row in rows:
-            try:
-                # Decrypt the stored token and compare with provided token
-                decrypted_token = decrypt_data(row["access_token"]).decode()
-                if decrypted_token == token:
-                    try:
-                        # Fetch the associated user_email for this access token row
-                        cursor.execute("SELECT user_email FROM access_tokens WHERE rowid = ?", (row["rowid"],))
-                        user_row = cursor.fetchone()
-                        if user_row and user_row["user_email"]:
-                            # Also remove the user's stored credentials for this provider
-                            cursor.execute("DELETE FROM user_tokens WHERE user_email = ? AND provider = ?", (user_row["user_email"], provider))
-                    except Exception:
-                        # If anything goes wrong here, continue with deleting the token row to avoid leaving stale tokens
-                        pass
-                    # Delete this row
-                    cursor.execute("DELETE FROM access_tokens WHERE rowid = ?", (row["rowid"],))
-                    conn.commit()
-                    return True
-            except Exception:
-                # Skip invalid/corrupted tokens
-                continue
-
-        return False
+    db = database.get_db(config)
+    return db.revoke_access_token(token, provider)
 
 
 def list_user_tokens(config: Config, user_email: str, provider: str = 'google') -> List[str]:
     """List all active tokens for a specific user."""
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT access_token FROM access_tokens WHERE user_email = ? AND provider = ?",
-            (user_email, provider)
-        )
-        rows = cursor.fetchall()
-        
-        user_tokens = []
-        for row in rows:
-            try:
-                # Decrypt the access token
-                decrypted_token = decrypt_data(row["access_token"]).decode()
-                user_tokens.append(decrypted_token)
-            except Exception:
-                # Skip invalid/corrupted tokens
-                continue
-        
-        return user_tokens
+    db = database.get_db(config)
+    return db.list_user_tokens(user_email, provider)
 
 
 def save_user_credentials(config: Config, user_email: str, credentials: Any, provider: str = 'google') -> None:
     """Save user OAuth credentials with encryption to database."""
-    user_hash = hashlib.sha256(user_email.encode()).hexdigest()[:16]
-    token_data = pickle.dumps(credentials)
-    
-    # Encrypt only the token_data, keep user_email and user_hash unencrypted for queries
-    encrypted_token_data = encrypt_data(token_data)
-    
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT OR REPLACE INTO user_tokens (user_email, provider, user_hash, token_data) VALUES (?, ?, ?, ?)",
-            (user_email, provider, user_hash, encrypted_token_data)
-        )
-        conn.commit()
+    db = database.get_db(config)
+    db.save_user_credentials(user_email, credentials, provider)
 
 
 def generate_export_token() -> str:
@@ -570,85 +304,35 @@ def generate_export_token() -> str:
 
 def save_export_token(config: Config, user_email: str, provider: str = 'google') -> str:
     """Save or retrieve existing export token for user."""
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        
-        # Check if export token already exists
-        cursor.execute(
-            "SELECT export_token FROM export_tokens WHERE user_email = ? AND provider = ?",
-            (user_email, provider)
-        )
-        row = cursor.fetchone()
-        
-        if row:
-            return row["export_token"]
-        
-        # Generate new export token
-        export_token = generate_export_token()
-        cursor.execute(
-            "INSERT INTO export_tokens (export_token, user_email, provider) VALUES (?, ?, ?)",
-            (export_token, user_email, provider)
-        )
-        conn.commit()
-        return export_token
+    db = database.get_db(config)
+    
+    # Check if export token already exists
+    existing_token = db.get_export_token(user_email, provider)
+    if existing_token:
+        return existing_token
+    
+    # Generate new export token
+    export_token = generate_export_token()
+    db.save_export_token(export_token, user_email, provider)
+    return export_token
 
 
 def get_user_from_export_token(config: Config, export_token: str) -> Optional[Dict[str, str]]:
     """Get user email and provider from export token."""
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT user_email, provider FROM export_tokens WHERE export_token = ?",
-            (export_token,)
-        )
-        row = cursor.fetchone()
-        if row:
-            return {"user_email": row["user_email"], "provider": row["provider"]}
-        return None
+    db = database.get_db(config)
+    return db.get_user_from_export_token(export_token)
 
 
 def revoke_export_token(config: Config, export_token: str) -> bool:
     """Revoke export token."""
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM export_tokens WHERE export_token = ?", (export_token,))
-        conn.commit()
-        return cursor.rowcount > 0
+    db = database.get_db(config)
+    return db.revoke_export_token(export_token)
 
 
 def load_user_credentials(config: Config, user_email: str, provider: str = 'google') -> Optional[Any]:
     """Load user OAuth credentials with decryption from database."""
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT token_data FROM user_tokens WHERE user_email = ? AND provider = ?",
-            (user_email, provider)
-        )
-        row = cursor.fetchone()
-        if row:
-            try:
-                # Decrypt and return the token data
-                decrypted_token_data = decrypt_data(row["token_data"])
-                raw = None
-                try:
-                    # Try to unpickle (Google Credentials or other pickle-encoded objects)
-                    raw = pickle.loads(decrypted_token_data)
-                except Exception:
-                    # Fall back to JSON decode for dict-shaped tokens (Microsoft)
-                    try:
-                        raw = json.loads(decrypted_token_data.decode())
-                    except Exception:
-                        raw = None
-
-                if raw is None:
-                    return None
-
-                # Normalize shape for consistent handling across providers
-                return normalize_loaded_credentials(raw, provider=provider)
-            except Exception:
-                # Invalid/corrupted token data
-                return None
-        return None
+    db = database.get_db(config)
+    return db.load_user_credentials(user_email, provider)
 
 
 def normalize_loaded_credentials(raw: Any, provider: str = 'google') -> Dict[str, Any]:
@@ -730,32 +414,15 @@ def save_normalized_user_credentials(config: Config, user_email: str, normalized
     The normalized dict should follow the canonical shape described in `normalize_loaded_credentials`.
     This helper stores the normalized dict as JSON (encrypted) so `load_user_credentials` can read and normalize it back.
     """
-    user_hash = hashlib.sha256(user_email.encode()).hexdigest()[:16]
-    token_json = json.dumps(normalized).encode()
-    encrypted = encrypt_data(token_json)
-
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT OR REPLACE INTO user_tokens (user_email, provider, user_hash, token_data) VALUES (?, ?, ?, ?)",
-            (user_email, provider, user_hash, encrypted)
-        )
-        conn.commit()
+    db = database.get_db(config)
+    # For saving normalized credentials, we'll pickle them like other credentials
+    db.save_user_credentials(user_email, normalized, provider)
 
 
 def create_access_token_for_user(config: Config, user_email: str, access_token: str, provider: str = 'microsoft') -> None:
-    """Create an encrypted access_tokens row for a user (useful for tests).
-
-    Stores the encrypted access_token and links it to user_email/provider.
-    """
-    encrypted = encrypt_data(access_token.encode())
-    with get_database_connection(config) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT OR REPLACE INTO access_tokens (access_token, provider, user_email) VALUES (?, ?, ?)",
-            (encrypted, provider, user_email)
-        )
-        conn.commit()
+    """Create an encrypted access token for a user."""
+    db = database.get_db(config)
+    db.create_access_token(access_token, user_email, provider)
 
 
 def generate_access_token() -> str:
@@ -775,15 +442,11 @@ def authenticate_request() -> Optional[str]:
     return get_user_from_token(token, provider=None)
 
 
-# Google-specific functions moved to providers/google.py
-
-
-
 # Initialize database on app startup (needed for Gunicorn)
 try:
     config = get_config()
     init_database(config)
-    print(f"✅ Database initialized at: {config.database_path}")
+    print(f"✅ Database initialized at: {"PostgreSQL database"}")
 except Exception as e:
     print(f"⚠️  Warning: Database initialization failed: {e}")
     print("Will attempt to initialize on first request")
@@ -1623,10 +1286,14 @@ def revoke_all_tokens(export_token: str) -> Any:
         revoke_export_token(config, export_token)
         
         # Delete user credentials
-        with get_database_connection(config) as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM user_tokens WHERE user_email = ? AND provider = ?", (user_email, provider))
+        db = database.get_db(config)
+        conn = db.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM user_tokens WHERE user_email = %s AND provider = %s", (user_email, provider))
             conn.commit()
+        finally:
+            db.return_connection(conn)
         
         return jsonify({
             "status": "success",
@@ -1699,7 +1366,7 @@ if __name__ == '__main__':
     # Initialize database on startup
     config = get_config()
     init_database(config)
-    print(f"Database initialized at: {config.database_path}")
+    print(f"Database initialized at: {"PostgreSQL database"}")
     
     port = int(os.environ.get("PORT", "5000"))
     app.run(host='0.0.0.0', port=port, debug=True)

@@ -1,6 +1,26 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: docker.io/library/postgres:17.6-alpine
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-downloader}
+      - POSTGRES_USER=${POSTGRES_USER:-downloader}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - proxy
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-downloader}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   traefik:
     image: docker.io/library/traefik:v3.5.3
     container_name: traefik
@@ -25,8 +45,14 @@ services:
     container_name: contacts-calendar-downloader
     restart: unless-stopped
     environment:
+      # PostgreSQL Configuration
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-downloader}
+      - POSTGRES_USER=${POSTGRES_USER:-downloader}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      
       # Core Configuration
-      - DATABASE=${DATABASE:-/app/data/credentials.db}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - GOOGLE_CREDENTIALS=${GOOGLE_CREDENTIALS:-/app/credentials/google.json}
       - MICROSOFT_CREDENTIALS=${MICROSOFT_CREDENTIALS:-/app/credentials/microsoft.json}
@@ -50,14 +76,15 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Persist database and credentials
-      - app-data:/app/data:z
       # Credentials for Google API (mount your credentials.json here)
       - ./credentials/:/app/credentials/:z
     networks:
       - proxy
     depends_on:
-      - traefik
+      postgres:
+        condition: service_healthy
+      traefik:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -71,6 +98,8 @@ networks:
 
 volumes:
   traefik-letsencrypt:
+    driver: local
+  postgres-data:
     driver: local
   app-data:
     driver: local

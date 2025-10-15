@@ -12,8 +12,14 @@ The service supports the following environment variables:
 # Core Configuration
 GOOGLE_CREDENTIALS="credentials/google.json"    # Google OAuth credentials file path
 MICROSOFT_CREDENTIALS="credentials/microsoft.json"  # Microsoft OAuth credentials file path
-DATABASE="downloader.db"                        # SQLite database file path
 ENCRYPTION_KEY=""                               # AES-256 encryption key (REQUIRED for production)
+
+# PostgreSQL Database Configuration
+POSTGRES_HOST="localhost"                       # PostgreSQL server host
+POSTGRES_PORT="5432"                            # PostgreSQL server port
+POSTGRES_DB="downloader"      # PostgreSQL database name
+POSTGRES_USER="downloader"                        # PostgreSQL username
+POSTGRES_PASSWORD="changeme"                            # PostgreSQL password (REQUIRED)
 
 # Server Configuration
 HOST="localhost"                                # Server bind address for redirect URI
@@ -44,11 +50,36 @@ PAGE_SIZE="1000"                                # Contacts per API request (max 
 - **Description**: Path to the Microsoft OAuth 2.0 client credentials JSON file
 - **Required**: Yes (for Microsoft provider functionality)
 
-#### DATABASE
-- **Type**: File path (string)
-- **Default**: `downloader.db`
-- **Description**: Path to the SQLite database file for storing encrypted user tokens and access tokens
-- **Required**: No (defaults to current directory)
+#### POSTGRES_HOST
+- **Type**: String (hostname or IP)
+- **Default**: `localhost`
+- **Description**: PostgreSQL server hostname or IP address
+- **Required**: Yes
+- **Note**: Use `postgres` when running in Docker Compose
+
+#### POSTGRES_PORT
+- **Type**: Integer
+- **Default**: `5432`
+- **Description**: PostgreSQL server port
+- **Required**: No (defaults to standard PostgreSQL port)
+
+#### POSTGRES_DB
+- **Type**: String
+- **Default**: `contacts_calendar_downloader`
+- **Description**: PostgreSQL database name
+- **Required**: Yes
+
+#### POSTGRES_USER
+- **Type**: String
+- **Default**: `postgres`
+- **Description**: PostgreSQL username for authentication
+- **Required**: Yes
+
+#### POSTGRES_PASSWORD
+- **Type**: String
+- **Default**: None
+- **Description**: PostgreSQL password for authentication
+- **Required**: **YES** - Database connection will fail without this
 
 #### ENCRYPTION_KEY
 - **Type**: Base64-encoded string
@@ -118,9 +149,13 @@ The following are set by the application and not user-configurable:
 
 ## Database Storage
 
+### PostgreSQL Database
+
+The service uses PostgreSQL for persistent storage with connection pooling for performance. The database connection pool maintains 1-20 concurrent connections to handle multiple requests efficiently.
+
 ### Database Schema
 
-The service uses a database with the following tables:
+The service uses a PostgreSQL database with the following tables:
 - `user_tokens`: Stores encrypted OAuth tokens per user
   The `token_data` field is encrypted using AES-256 and contains pickled OAuth credentials
 - `access_tokens`: Stores Bearer tokens for API access
