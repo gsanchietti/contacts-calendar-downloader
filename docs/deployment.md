@@ -133,6 +133,8 @@ curl https://your-domain.com/metrics
 **Key Metrics to Monitor:**
 
 - `gcd_registered_users_total` - Total registered users
+- `gcd_microsoft_registered_users_total` - Registered Microsoft users
+- `gcd_google_registered_users_total` - Registered Google users
 - `gcd_active_tokens_total` - Active access tokens
 - `gcd_downloads_total{format,status}` - Downloads by format/status
 - `gcd_contacts_downloaded_total` - Total contacts downloaded

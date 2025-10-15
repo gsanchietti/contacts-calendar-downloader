@@ -322,3 +322,63 @@ def extract_contact_row(person: Dict) -> Dict[str, str]:
         "Country": _find_by_type(addresses, "home", "country") or _find_by_type(addresses, "work", "country"),
         "Resource Name": person.get("resourceName", ""),
     }
+
+
+def check_google_credentials_health(credentials_path) -> Dict[str, Any]:
+    """Check Google credentials file health.
+    
+    Args:
+        credentials_path: Path object or string to Google credentials file
+    
+    Returns:
+        Dict with 'status' ('ok' or 'error'), credentials info if ok, 'message' if error
+    """
+    import json
+    from pathlib import Path
+    
+    # Convert to Path object if string
+    if isinstance(credentials_path, str):
+        credentials_path = Path(credentials_path)
+    
+    if not credentials_path.exists():
+        return {
+            "status": "error",
+            "message": "Credentials file not found",
+            "path": str(credentials_path)
+        }
+    
+    try:
+        google_creds = json.loads(credentials_path.read_text())
+        
+        # Validate required fields for OAuth client
+        if "web" in google_creds or "installed" in google_creds:
+            creds_type = "web" if "web" in google_creds else "installed"
+            required_fields = ["client_id", "client_secret", "auth_uri", "token_uri"]
+            missing_fields = [f for f in required_fields if f not in google_creds.get(creds_type, {})]
+            
+            if missing_fields:
+                return {
+                    "status": "error",
+                    "message": f"Missing required fields: {', '.join(missing_fields)}"
+                }
+            
+            return {
+                "status": "ok",
+                "client_id": google_creds[creds_type]["client_id"][:20] + "..."
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Invalid credentials format (missing 'web' or 'installed' key)"
+            }
+    except json.JSONDecodeError as e:
+        return {
+            "status": "error",
+            "message": f"Invalid JSON: {str(e)}"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+

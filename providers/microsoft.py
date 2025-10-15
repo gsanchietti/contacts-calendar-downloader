@@ -329,3 +329,57 @@ def handle_oauth_callback(config, flow_row):
         raise ValueError('Could not identify Microsoft user email')
 
     return user_email, creds
+
+
+def check_microsoft_credentials_health(credentials_path) -> Dict[str, Any]:
+    """Check Microsoft credentials file health.
+    
+    Args:
+        credentials_path: Path object or string to Microsoft credentials file
+    
+    Returns:
+        Dict with 'status' ('ok' or 'error'), credentials info if ok, 'message' if error
+    """
+    import json
+    from pathlib import Path
+    
+    # Convert to Path object if string
+    if isinstance(credentials_path, str):
+        credentials_path = Path(credentials_path)
+    
+    if not credentials_path.exists():
+        return {
+            "status": "error",
+            "message": "Credentials file not found",
+            "path": str(credentials_path)
+        }
+    
+    try:
+        ms_creds = json.loads(credentials_path.read_text())
+        
+        # Validate required fields for Azure app registration
+        required_fields = ["client_id", "client_secret", "tenant"]
+        missing_fields = [f for f in required_fields if not ms_creds.get(f)]
+        
+        if missing_fields:
+            return {
+                "status": "error",
+                "message": f"Missing required fields: {', '.join(missing_fields)}"
+            }
+        
+        return {
+            "status": "ok",
+            "client_id": ms_creds["client_id"][:20] + "...",
+            "tenant": ms_creds["tenant"]
+        }
+    except json.JSONDecodeError as e:
+        return {
+            "status": "error",
+            "message": f"Invalid JSON: {str(e)}"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+

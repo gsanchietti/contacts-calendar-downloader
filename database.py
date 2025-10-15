@@ -565,6 +565,16 @@ class DatabaseBackend:
                 return cursor.fetchone()[0]
         finally:
             self.return_connection(conn)
+
+    def get_provider_user_count(self, provider: str) -> int:
+        """Get number of registered users for a specific provider."""
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM user_tokens WHERE provider = %s", (provider,))
+                return cursor.fetchone()[0]
+        finally:
+            self.return_connection(conn)
     
     def get_active_token_count(self) -> int:
         """Get number of active access tokens."""
@@ -621,3 +631,32 @@ def get_db(config=None):
             config = MinimalConfig()
         _db_instance = DatabaseBackend(config)
     return _db_instance
+
+
+def check_database_health(config: Any) -> Dict[str, Any]:
+    """Check database connectivity and health.
+    
+    Args:
+        config: Configuration object with database connection details
+    
+    Returns:
+        Dict with 'status' ('ok' or 'error'), 'type' if ok, 'message' if error
+    """
+    try:
+        db = get_db(config)
+        conn = db.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            return {
+                "status": "ok",
+                "type": "PostgreSQL"
+            }
+        finally:
+            db.return_connection(conn)
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }

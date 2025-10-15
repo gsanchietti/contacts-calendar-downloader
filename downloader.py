@@ -57,6 +57,16 @@ REGISTERED_USERS = Gauge(
     'Number of registered users in database'
 )
 
+MICROSOFT_REGISTERED_USERS = Gauge(
+    'gcd_microsoft_registered_users_total',
+    'Number of registered Microsoft users in database'
+)
+
+GOOGLE_REGISTERED_USERS = Gauge(
+    'gcd_google_registered_users_total',
+    'Number of registered Google users in database'
+)
+
 ACTIVE_TOKENS = Gauge(
     'gcd_active_tokens_total', 
     'Number of active access tokens'
@@ -141,8 +151,16 @@ def update_metrics(config: Config) -> None:
         # Count registered users
         user_count = db.get_user_count()
         REGISTERED_USERS.set(user_count)
-        
-        # Count active access tokens  
+
+        # Count microsoft users
+        microsoft_user_count = db.get_provider_user_count('microsoft')
+        MICROSOFT_REGISTERED_USERS.set(microsoft_user_count)
+
+        # Count google users
+        google_user_count = db.get_provider_user_count('google')
+        GOOGLE_REGISTERED_USERS.set(google_user_count)
+
+        # Count active access tokens
         token_count = db.get_active_token_count()
         ACTIVE_TOKENS.set(token_count)
         
@@ -1174,12 +1192,45 @@ def revoke_token() -> Any:
 
 @app.route('/health')
 def health():
-    """Health check endpoint."""
+    """Health check endpoint with comprehensive credential validation."""
     config = get_config()
-    if not config.google_credentials_path.exists() or not config.microsoft_credentials_path.exists():
-        return jsonify({"status": "unhealthy", "error": "One or more credential files not found"}), 500
     
-    return jsonify({"status": "healthy"})
+    health_status = {
+        "status": "healthy",
+        "checks": {
+            "google_credentials": {"status": "unknown"},
+            "microsoft_credentials": {"status": "unknown"},
+            "database": {"status": "unknown"}
+        }
+    }
+    
+    issues = []
+    
+    # Check Google credentials using provider module
+    google_check = providers.google.check_google_credentials_health(config.google_credentials_path)
+    health_status["checks"]["google_credentials"] = google_check
+    if google_check["status"] == "error":
+        issues.append(f"Google credentials: {google_check['message']}")
+    
+    # Check Microsoft credentials using provider module
+    microsoft_check = providers.microsoft.check_microsoft_credentials_health(config.microsoft_credentials_path)
+    health_status["checks"]["microsoft_credentials"] = microsoft_check
+    if microsoft_check["status"] == "error":
+        issues.append(f"Microsoft credentials: {microsoft_check['message']}")
+    
+    # Check database connectivity using database module
+    database_check = database.check_database_health(config)
+    health_status["checks"]["database"] = database_check
+    if database_check["status"] == "error":
+        issues.append(f"Database: {database_check['message']}")
+    
+    # Determine overall status
+    if issues:
+        health_status["status"] = "unhealthy"
+        health_status["issues"] = issues
+        return jsonify(health_status), 500
+    
+    return jsonify(health_status)
 
 
 @app.route('/metrics')

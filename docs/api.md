@@ -197,17 +197,6 @@ Prometheus metrics endpoint for monitoring. **Not authenticated** - provides ope
 
 **Content-Type:** `text/plain; version=0.0.4; charset=utf-8`
 
-**Custom Metrics:**
-- `gcd_registered_users_total` - Number of registered users in database
-- `gcd_active_tokens_total` - Number of active access tokens
-- `gcd_downloads_total{format,status}` - Total downloads by format (csv/json) and status (success/error)
-- `gcd_contacts_downloaded_total` - Total number of contacts downloaded across all users
-- `gcd_oauth_flows_total{status}` - Total OAuth flows by status (success/error)
-- `gcd_database_size_bytes` - Size of SQLite database file in bytes
-- `gcd_encryption_warnings_total` - Number of encryption key warnings shown
-- `gcd_http_requests_total{method,endpoint,status_code}` - HTTP request counters
-- `gcd_http_request_duration_seconds{method,endpoint}` - HTTP request latency histogram
-
 **Example:**
 ```bash
 curl http://localhost:5000/metrics
