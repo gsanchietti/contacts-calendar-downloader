@@ -30,24 +30,19 @@ Access your data in CSV, JSON, or ICS formats via a simple public URL (or API en
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Set up PostgreSQL database
-# Option A: Using Docker Compose (recommended)
-docker-compose up postgres -d
-
-# Option B: Using local PostgreSQL installation
-createdb contacts_calendar_downloader
-# Or using psql:
-# psql -U postgres -c "CREATE DATABASE contacts_calendar_downloader;"
-
-# 3. Configure environment variables
+# 2. Configure environment variables
 export POSTGRES_HOST=localhost
 export POSTGRES_PORT=5432
 export POSTGRES_DB=contacts_calendar_downloader
 export POSTGRES_USER=postgres
 export POSTGRES_PASSWORD=your_secure_password
 
-# 4. Configure Google and Microsoft credentials, save the JSON files locally
+# 3. Configure Google and Microsoft credentials, save the JSON files locally
 # See the Provider Setup documentation for details
+mkdir -p credentials
+# Save your credentials files as:
+# credentials/google.json
+# credentials/microsoft.json
 export GOOGLE_CREDENTIALS=./credentials/google.json
 export MICROSOFT_CREDENTIALS=./credentials/microsoft.json
 

@@ -337,32 +337,14 @@ class DatabaseBackend:
         Flow: find token by decrypting all → delete matching token and user credentials
         """
         conn = self.get_connection()
+        encrypted_token = self._encrypt_to_base64(token)
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                if provider:
-                    cursor.execute(
-                        "SELECT access_token, user_email FROM access_tokens WHERE provider = %s",
-                        (provider,)
-                    )
-                else:
-                    cursor.execute("SELECT access_token, user_email FROM access_tokens")
-                rows = cursor.fetchall()
-
-                for row in rows:
-                    try:
-                        # Decrypt the stored token
-                        decrypted_token = self._decrypt_from_base64(row["access_token"])
-                        if decrypted_token == token:
-                            # Delete user tokens and access token
-                            cursor.execute("DELETE FROM user_tokens WHERE user_email = %s AND provider = %s", 
-                                         (row["user_email"], provider))
-                            # Delete using the encrypted form
-                            cursor.execute("DELETE FROM access_tokens WHERE access_token = %s", 
-                                         (row["access_token"],))
-                            conn.commit()
-                            return True
-                    except Exception:
-                        continue
+                cursor.execute("DELETE FROM access_tokens WHERE access_token = %s AND provider = %s", 
+                               (encrypted_token, provider))
+                if cursor.rowcount > 0:
+                    conn.commit()
+                    return True
                 return False
         finally:
             self.return_connection(conn)
@@ -535,23 +517,13 @@ class DatabaseBackend:
         Flow: find token by decrypting all → delete matching token
         """
         conn = self.get_connection()
+        encrypted_token = self._encrypt_to_base64(export_token)
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                # Find the encrypted token that matches the plaintext
-                cursor.execute("SELECT export_token FROM export_tokens")
-                rows = cursor.fetchall()
-                
-                for row in rows:
-                    try:
-                        # Decrypt the stored token
-                        decrypted_token = self._decrypt_from_base64(row["export_token"])
-                        if decrypted_token == export_token:
-                            # Delete using the encrypted form
-                            cursor.execute("DELETE FROM export_tokens WHERE export_token = %s", (row["export_token"],))
-                            conn.commit()
-                            return cursor.rowcount > 0
-                    except Exception:
-                        continue
+                cursor.execute("DELETE FROM export_tokens WHERE export_token = %s", (encrypted_token,))
+                if cursor.rowcount > 0:
+                    conn.commit()
+                    return True
                 return False
         finally:
             self.return_connection(conn)

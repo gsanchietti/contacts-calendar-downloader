@@ -203,6 +203,8 @@ curl http://localhost:5000/metrics
 
 # Sample output:
 # gcd_registered_users_total 3.0
+# gcd_microsoft_registered_users_total 1.0
+# gcd_google_registered_users_total 2.0
 # gcd_active_tokens_total 2.0
 # gcd_downloads_total{format="json",status="success"} 15.0
 # gcd_contacts_downloaded_total 450.0

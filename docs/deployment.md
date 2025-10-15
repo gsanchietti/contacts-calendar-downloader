@@ -2,6 +2,8 @@
 
 This document covers production deployment, security configuration, monitoring, and operational procedures for the Contacts & Calendar Downloader service.
 
+Before beginning, ensure you have completed the [Provider Setup](providers.md) to obtain Google and Microsoft OAuth credentials.
+
 ## Production Deployment Options
 
 ### Podman Compose (Rootless) - Recommended
@@ -35,24 +37,25 @@ cd contacts-calendar-downloader
 # 2. Configure environment
 cp .env.example .env
 
-# Generate secure encryption key and PostgreSQL password, set them in .env
+# 3. Generate secure encryption key and PostgreSQL password, set them in .env
 ENCRYPTION_KEY=$(openssl rand 32 | base64 | tr '+/' '-_' | tr -d '\n')
 POSTGRES_PASSWORD=$(uuidgen | sha1sum | awk '{print $1}')
 
-# Edit other settings
+# 4. Edit other settings
 vi .env  # Configure DOMAIN, ACME_EMAIL, etc.
 
-# 3. Deploy services
+# 5. Download credentials files from Microsoft and Google Cloud and save them in the credentials directory
+mkdir -p credentials
+# Save your credentials files as:
+# credentials/google.json
+# credentials/microsoft.json
+
+# 6. Deploy services
 ./deploy.sh
 
-# 4. Verify deployment
+# 7. Verify deployment
 curl https://your-domain.com/health
 ```
-
-#### Service URLs (Production)
-
-- **Application**: https://your-domain.com
-- **Health/Metrics**: https://your-domain.com/health, /metrics
 
 #### Port Configuration
 
@@ -111,70 +114,14 @@ docker run --rm --name contacts-service \
 ```
 
 **Note:** These examples require an external PostgreSQL server. For a complete production setup with PostgreSQL included, use the Docker Compose configuration (see Quick Production Deploy section above).
+
 ## Monitoring & Observability
 
-### Health Checks
+### Status and Metrics
 
-```bash
-# Basic health check
-curl https://your-domain.com/health
-# {"status": "healthy"}
-```
+See `/health` and `/metrics` endpoints inside [API](api.md) for details.
 
-### Prometheus Metrics
-
-The service exposes comprehensive metrics for monitoring:
-
-```bash
-# Get all metrics
-curl https://your-domain.com/metrics
-```
-
-**Key Metrics to Monitor:**
-
-- `gcd_registered_users_total` - Total registered users
-- `gcd_microsoft_registered_users_total` - Registered Microsoft users
-- `gcd_google_registered_users_total` - Registered Google users
-- `gcd_active_tokens_total` - Active access tokens
-- `gcd_downloads_total{format,status}` - Downloads by format/status
-- `gcd_contacts_downloaded_total` - Total contacts downloaded
-- `gcd_oauth_flows_total{status}` - OAuth success/failure rates
-- `gcd_database_size_bytes` - Database size monitoring
-- `gcd_encryption_warnings_total` - Security configuration alerts
-- `gcd_http_request_duration_seconds` - Response time histogram
-
-#### Prometheus Configuration
-
-```yaml
-scrape_configs:
-  - job_name: 'contacts-downloader'
-    static_configs:
-      - targets: ['your-domain.com']
-    scrape_interval: 30s
-    metrics_path: /metrics
-    scheme: https
-```
-
-#### Grafana Dashboard Examples
-
-```promql
-# Success rate
-rate(gcd_http_requests_total{status_code=~"2.."}[5m]) /
-rate(gcd_http_requests_total[5m])
-
-# 95th percentile response time
-histogram_quantile(0.95, rate(gcd_http_request_duration_seconds_bucket[5m]))
-
-# OAuth failure rate
-rate(gcd_oauth_flows_total{status="error"}[5m])
-
-# Database growth
-increase(gcd_database_size_bytes[1h])
-```
-
-### Log Monitoring
-
-#### Container Logs
+### Logs
 
 ```bash
 # View application logs

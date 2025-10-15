@@ -80,7 +80,12 @@ DOWNLOADS_TOTAL = Counter(
 
 CONTACTS_DOWNLOADED = Counter(
     'gcd_contacts_downloaded_total',
-    'Total number of contacts downloaded'
+    'Number of times contacts were downloaded'
+)
+
+CALENDAR_DOWNLOADED = Counter(
+    'gcd_calendar_downloaded_total',
+    'Number of times calendar events were downloaded'
 )
 
 OAUTH_FLOWS_TOTAL = Counter(
@@ -91,7 +96,7 @@ OAUTH_FLOWS_TOTAL = Counter(
 
 DATABASE_SIZE_BYTES = Gauge(
     'gcd_database_size_bytes',
-    'Size of the SQLite database file in bytes'
+    'Size of the database in bytes'
 )
 
 ENCRYPTION_WARNINGS_TOTAL = Counter(
@@ -734,6 +739,7 @@ def download_contacts_endpoint() -> Any:
     # Authenticate the request and determine provider from token
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_contacts", status_code="401").inc()
         return jsonify({
             "error": "Authentication required",
             "solution": "Include 'Authorization: Bearer <access_token>' header",
@@ -743,6 +749,7 @@ def download_contacts_endpoint() -> Any:
     token = auth_header.split(' ', 1)[1]
     token_info = db.get_provider_from_token(token)
     if not token_info:
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_contacts", status_code="401").inc()
         return jsonify({
             "error": "Authentication required",
             "solution": "Include 'Authorization: Bearer <access_token>' header",
@@ -753,9 +760,11 @@ def download_contacts_endpoint() -> Any:
     provider = token_info['provider']
 
     if format_param not in ['csv', 'json']:
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_contacts", status_code="400").inc()
         return jsonify({"error": "Invalid format. Use 'csv' or 'json'"}), 400
 
     if not config.google_credentials_path.exists():
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_contacts", status_code="400").inc()
         return jsonify({"error": f"Credentials file not found: {config.google_credentials_path}"}), 400
 
     # provider is derived from the access token above
@@ -763,6 +772,8 @@ def download_contacts_endpoint() -> Any:
     if provider == 'google':
         service = google_provider.authenticate_google(config, user_email)
         if not service:
+            HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_contacts", status_code="401").inc()
+            DOWNLOADS_TOTAL.labels(format=format_param, status='error').inc()
             return jsonify({
                 "error": f"User '{user_email}' token has expired or is invalid",
                 "solution": "Re-authenticate by visiting /auth to get a new access token"
@@ -772,17 +783,22 @@ def download_contacts_endpoint() -> Any:
             contacts = google_provider.download_contacts(service, page_size=config.page_size, person_fields=config.person_fields)
 
             if not contacts:
+                HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_contacts", status_code="404").inc()
+                DOWNLOADS_TOTAL.labels(format=format_param, status='error').inc()
                 return jsonify({"error": "No contacts found"}), 404
 
             rows = [google_provider.extract_contact_row(person) for person in contacts]
 
         except Exception as e:
+            HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_contacts", status_code="500").inc()
             DOWNLOADS_TOTAL.labels(format=format_param, status='error').inc()
             return jsonify({"error": str(e)}), 500
 
     elif provider == 'microsoft':
         creds = microsoft_provider.authenticate_microsoft(config, user_email)
         if not creds:
+            HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_contacts", status_code="401").inc()
+            DOWNLOADS_TOTAL.labels(format=format_param, status='error').inc()
             return jsonify({
                 "error": f"User '{user_email}' token has expired or is invalid",
                 "solution": "Re-authenticate by visiting /auth?provider=microsoft to get a new access token"
@@ -791,18 +807,24 @@ def download_contacts_endpoint() -> Any:
         try:
             contacts = microsoft_provider.fetch_contacts(creds, page_size=config.page_size)
             if not contacts:
+                HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_contacts", status_code="404").inc()
+                DOWNLOADS_TOTAL.labels(format=format_param, status='error').inc()
                 return jsonify({"error": "No contacts found"}), 404
             rows = [microsoft_provider.extract_contact_row(c) for c in contacts]
         except Exception as e:
+            HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_contacts", status_code="500").inc()
             DOWNLOADS_TOTAL.labels(format=format_param, status='error').inc()
             return jsonify({"error": str(e)}), 500
 
     else:
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_contacts", status_code="400").inc()
+        DOWNLOADS_TOTAL.labels(format=format_param, status='error').inc()
         return jsonify({"error": f"Unsupported provider: {provider}"}), 400
 
     # Update metrics
+    HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="download_contacts", status_code="200").inc()
     DOWNLOADS_TOTAL.labels(format=format_param, status='success').inc()
-    CONTACTS_DOWNLOADED.inc(len(rows))
+    CONTACTS_DOWNLOADED.inc()
 
     if format_param == 'json':
         return jsonify({
@@ -917,6 +939,7 @@ def download_calendar() -> Any:
             return jsonify({"error": f"Unsupported provider: {provider}"}), 400
 
         DOWNLOADS_TOTAL.labels(format="ics", status="success").inc()
+        CALENDAR_DOWNLOADED.inc()
 
         response = Response(
             calendar_ics,
@@ -954,6 +977,7 @@ def export_contacts_csv(export_token: str) -> Any:
         # Get user from export token
         token_info = db.get_user_from_export_token(export_token)
         if not token_info:
+            HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_contacts_csv", status_code="404").inc()
             return jsonify({"error": "Invalid export token"}), 404
         
         user_email = token_info['user_email']
@@ -965,11 +989,15 @@ def export_contacts_csv(export_token: str) -> Any:
             print(f"[DEBUG] Authenticating Google user...", file=sys.stderr, flush=True)
             service = google_provider.authenticate_google(config, user_email)
             if not service:
+                HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_contacts_csv", status_code="401").inc()
+                DOWNLOADS_TOTAL.labels(format='csv', status='error').inc()
                 return jsonify({"error": "Authentication failed"}), 401
             
             print(f"[DEBUG] Downloading Google contacts...", file=sys.stderr, flush=True)
             contacts = google_provider.download_contacts(service, page_size=config.page_size, person_fields=config.person_fields)
             if not contacts:
+                HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_contacts_csv", status_code="404").inc()
+                DOWNLOADS_TOTAL.labels(format='csv', status='error').inc()
                 return jsonify({"error": "No contacts found"}), 404
             
             rows = [google_provider.extract_contact_row(person) for person in contacts]
@@ -978,15 +1006,21 @@ def export_contacts_csv(export_token: str) -> Any:
             print(f"[DEBUG] Authenticating Microsoft user...", file=sys.stderr, flush=True)
             creds = microsoft_provider.authenticate_microsoft(config, user_email)
             if not creds:
+                HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_contacts_csv", status_code="401").inc()
+                DOWNLOADS_TOTAL.labels(format='csv', status='error').inc()
                 return jsonify({"error": "Authentication failed"}), 401
             
             print(f"[DEBUG] Downloading Microsoft contacts...", file=sys.stderr, flush=True)
             contacts = microsoft_provider.fetch_contacts(creds, page_size=config.page_size)
             if not contacts:
+                HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_contacts_csv", status_code="404").inc()
+                DOWNLOADS_TOTAL.labels(format='csv', status='error').inc()
                 return jsonify({"error": "No contacts found"}), 404
             rows = [microsoft_provider.extract_contact_row(c) for c in contacts]
             
         else:
+            HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_contacts_csv", status_code="400").inc()
+            DOWNLOADS_TOTAL.labels(format='csv', status='error').inc()
             return jsonify({"error": f"Unsupported provider: {provider}"}), 400
         
         # Generate CSV
@@ -1007,12 +1041,19 @@ def export_contacts_csv(export_token: str) -> Any:
         for row in rows:
             writer.writerow(row)
         
+        # Update metrics for successful export
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_contacts_csv", status_code="200").inc()
+        DOWNLOADS_TOTAL.labels(format='csv', status='success').inc()
+        CONTACTS_DOWNLOADED.inc()
+        
         return output.getvalue(), 200, {'Content-Type': 'text/csv'}
         
     except Exception as e:
         print(f"[ERROR] Export failed: {e}", file=sys.stderr, flush=True)
         import traceback
         traceback.print_exc(file=sys.stderr)
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_contacts_csv", status_code="500").inc()
+        DOWNLOADS_TOTAL.labels(format='csv', status='error').inc()
         return jsonify({"error": str(e)}), 500
 
 
@@ -1025,6 +1066,7 @@ def export_calendar_ics(export_token: str) -> Any:
     # Get user from export token
     token_info = db.get_user_from_export_token(export_token)
     if not token_info:
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_calendar_ics", status_code="404").inc()
         return jsonify({"error": "Invalid export token"}), 404
     
     user_email = token_info['user_email']
@@ -1034,6 +1076,8 @@ def export_calendar_ics(export_token: str) -> Any:
         if provider == 'google':
             credentials = load_user_credentials(config, user_email, provider='google')
             if not credentials:
+                HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_calendar_ics", status_code="401").inc()
+                DOWNLOADS_TOTAL.labels(format='ics', status='error').inc()
                 return jsonify({"error": "Authentication failed"}), 401
             
             if getattr(credentials, 'expired', False) and getattr(credentials, 'refresh_token', None):
@@ -1045,12 +1089,21 @@ def export_calendar_ics(export_token: str) -> Any:
         elif provider == 'microsoft':
             creds = microsoft_provider.authenticate_microsoft(config, user_email)
             if not creds:
+                HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_calendar_ics", status_code="401").inc()
+                DOWNLOADS_TOTAL.labels(format='ics', status='error').inc()
                 return jsonify({"error": "Authentication failed"}), 401
             
             calendar_ics = microsoft_provider.fetch_microsoft_calendar(creds)
             
         else:
+            HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_calendar_ics", status_code="400").inc()
+            DOWNLOADS_TOTAL.labels(format='ics', status='error').inc()
             return jsonify({"error": f"Unsupported provider: {provider}"}), 400
+        
+        # Update metrics for successful export
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_calendar_ics", status_code="200").inc()
+        DOWNLOADS_TOTAL.labels(format='ics', status='success').inc()
+        CALENDAR_DOWNLOADED.inc()
         
         return Response(
             calendar_ics,
@@ -1062,6 +1115,8 @@ def export_calendar_ics(export_token: str) -> Any:
         )
         
     except Exception as e:
+        HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="export_calendar_ics", status_code="500").inc()
+        DOWNLOADS_TOTAL.labels(format='ics', status='error').inc()
         return jsonify({"error": str(e)}), 500
 
 
