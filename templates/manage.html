@@ -2,101 +2,181 @@
 
 {% block title %}Manage Export Token - {{ user_email }}{% endblock %}
 
-{% block head %}
-<style>
-  .manage-container { max-width: 900px; margin: 30px auto; padding: 0 15px; }
-  .page-header { text-align: center; margin-bottom: 40px; }
-  .page-header h1 { color: #1a73e8; margin-bottom: 10px; }
-  .page-header .subtitle { color: #666; font-size: 0.95em; }
-  
-  .info-section {
-    background: #f8f9fa;
-    border-left: 4px solid #1a73e8;
-    padding: 20px;
-    margin: 20px 0;
-    border-radius: 8px;
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="text-center mb-10">
+    <h1 class="text-3xl font-bold text-primary-600 mb-2">⚙️ Manage Your Export Token</h1>
+    <p class="text-gray-600">View and manage your permanent export URLs and access tokens</p>
+  </div>
+
+  <div class="bg-gray-50 border-l-4 border-primary-600 p-5 rounded-lg mb-6">
+    <h3 class="text-lg font-semibold text-primary-600 mb-4">📋 Account Information</h3>
+    <div class="space-y-3">
+      <div class="flex justify-between items-center pb-3 border-b border-gray-200">
+        <span class="font-semibold text-gray-800">User Email:</span>
+        <span class="text-gray-600 font-mono break-all">{{ user_email }}</span>
+      </div>
+      <div class="flex justify-between items-center pb-3 border-b border-gray-200">
+        <span class="font-semibold text-gray-800">Provider:</span>
+        <span class="text-gray-600 font-mono">{{ provider|upper }}</span>
+      </div>
+      <div class="flex justify-between items-center">
+        <span class="font-semibold text-gray-800">Export Token:</span>
+        <span class="text-gray-600 font-mono break-all">{{ export_token }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-primary-50 border-l-4 border-primary-600 p-5 rounded-lg mb-6">
+    <h3 class="text-lg font-semibold text-primary-600 mb-2 flex items-center gap-2">
+      🔗 Permanent Export URLs
+    </h3>
+    <p class="text-gray-700 mb-4">
+      These URLs work forever without authentication. Keep them secret - anyone with these URLs can access your data!
+    </p>
+    
+    <div class="bg-white p-4 rounded-lg border border-gray-300 mb-4">
+      <div class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+        📄 Contacts Export (CSV)
+      </div>
+      <div class="flex gap-2 flex-col sm:flex-row">
+        <input type="text" class="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm bg-gray-50" id="contactsUrl" value="{{ export_contacts_url }}" readonly>
+        <button class="px-5 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors font-medium whitespace-nowrap" onclick="copyToClipboard('contactsUrl', this)">Copy</button>
+      </div>
+    </div>
+    
+    <div class="bg-white p-4 rounded-lg border border-gray-300">
+      <div class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+        📅 Calendar Export (ICS)
+      </div>
+      <div class="flex gap-2 flex-col sm:flex-row">
+        <input type="text" class="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm bg-gray-50" id="calendarUrl" value="{{ export_calendar_url }}" readonly>
+        <button class="px-5 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors font-medium whitespace-nowrap" onclick="copyToClipboard('calendarUrl', this)">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-yellow-50 border-l-4 border-yellow-400 p-5 rounded-lg mb-6">
+    <h3 class="text-lg font-semibold text-yellow-700 mb-2 flex items-center gap-2">
+      🔑 Active Bearer Tokens
+    </h3>
+    <p class="text-gray-700 mb-4">
+      These is your API access tokens used for authenticated requests. Each token was created when you authorized the app.
+    </p>
+    
+    {% if tokens and tokens|length > 0 %}
+      {% for t in tokens %}
+      <div class="bg-white p-3 rounded-lg border border-gray-200 mb-2 font-mono text-sm">
+        <div>
+          <span class="text-primary-600 font-semibold">Token:</span> <span class="text-gray-700">{{ t }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="text-gray-600 italic text-center py-4">No active bearer tokens found.</div>
+    {% endif %}
+  </div>
+
+  <div class="bg-yellow-50 border-l-4 border-red-500 p-5 rounded-lg">
+    <h3 class="text-lg font-semibold text-red-600 mb-3 flex items-center gap-2">
+      <span class="text-xl">⚠️</span> Danger Zone
+    </h3>
+    <p class="text-gray-700 mb-2">
+      <strong>Revoking your tokens will:</strong>
+    </p>
+    <ul class="text-gray-700 mb-4 ml-5 space-y-1 list-disc">
+      <li>Delete all bearer tokens associated with your account</li>
+      <li>Revoke OAuth access with {{ provider|capitalize }}</li>
+      <li>Invalidate all export URLs permanently</li>
+      <li>Remove all stored credentials from the database</li>
+    </ul>
+    <p class="text-red-600 font-semibold mb-4">
+      ⚠️ This action cannot be undone. You will need to re-authorize to create new tokens.
+    </p>
+    
+    <form id="revokeForm" method="POST" action="/manage/{{ export_token }}/revoke">
+      <button class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold text-base" type="submit">
+        🗑️ Revoke and Delete All Tokens
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Copy URL to clipboard
+  function copyToClipboard(inputId, button) {
+    const input = document.getElementById(inputId);
+    const originalText = button.textContent;
+    
+    input.select();
+    input.setSelectionRange(0, 99999); // For mobile devices
+    
+    try {
+      document.execCommand('copy');
+      button.textContent = '✓ Copied!';
+      button.classList.remove('bg-primary-600', 'hover:bg-primary-700');
+      button.classList.add('bg-green-600');
+      
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.classList.remove('bg-green-600');
+        button.classList.add('bg-primary-600', 'hover:bg-primary-700');
+      }, 2000);
+    } catch (err) {
+      button.textContent = '✗ Failed';
+      setTimeout(() => {
+        button.textContent = originalText;
+      }, 2000);
+    }
+    
+    // Deselect
+    window.getSelection().removeAllRanges();
   }
   
-  .info-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 12px 0;
-    border-bottom: 1px solid #e0e0e0;
-  }
+  // Handle revoke form submission
+  const form = document.getElementById('revokeForm');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const confirmMessage = 
+      'Are you ABSOLUTELY SURE you want to revoke and delete all tokens?\n\n' +
+      'This will:\n' +
+      '• Delete all bearer tokens\n' +
+      '• Invalidate all export URLs\n' +
+      '• Revoke OAuth access\n' +
+      '• Remove all stored credentials\n\n' +
+      'This action CANNOT be undone!\n\n' +
+      'Click OK to proceed or Cancel to go back.';
+    
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+      
+    try {
+      const resp = await fetch(form.action, { method: 'POST' });
+      
+      if (resp.ok) {
+        alert('✓ Successfully revoked all tokens and deleted credentials.\n\nYou will be redirected to the homepage.');
+        window.location.href = '/';
+      } else {
+        const errorText = await resp.text();
+        alert('✗ Failed to revoke tokens.\n\nError: ' + (errorText || 'Unknown error') + '\n\nPlease check the server logs.');
+      }
+    } catch (error) {
+      alert('✗ Network error occurred.\n\nError: ' + error.message + '\n\nPlease try again or check your connection.');
+    }
+  });
   
-  .info-row:last-child { border-bottom: none; }
-  .info-label { font-weight: 600; color: #333; }
-  .info-value { color: #666; font-family: monospace; word-break: break-all; }
-  
-  .export-section {
-    background: #e8f0fe;
-    border-left: 4px solid #1a73e8;
-    padding: 20px;
-    margin: 25px 0;
-    border-radius: 8px;
-  }
-  
-  .export-section h3 {
-    margin-top: 0;
-    color: #1a73e8;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  .url-item {
-    background: white;
-    padding: 15px;
-    margin: 15px 0;
-    border-radius: 6px;
-    border: 1px solid #d0d0d0;
-  }
-  
-  .url-label {
-    font-weight: 600;
-    color: #333;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  .url-input-group {
-    display: flex;
-    gap: 8px;
-  }
-  
-  .url-input {
-    flex: 1;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-family: monospace;
-    font-size: 0.9em;
-    background: #f9f9f9;
-  }
-  
-  .copy-btn {
-    padding: 10px 20px;
-    background: #1a73e8;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 500;
-    transition: background 0.3s;
-  }
-  
-  .copy-btn:hover { background: #1557b0; }
-  .copy-btn.copied { background: #34a853; }
-  
-  .tokens-section {
-    background: #fef7e0;
-    border-left: 4px solid #f9ab00;
-    padding: 20px;
-    margin: 25px 0;
-    border-radius: 8px;
-  }
+  // Add click handlers to URL inputs for easy selection
+  document.querySelectorAll('input[readonly]').forEach(input => {
+    input.addEventListener('click', function() {
+      this.select();
+    });
+  });
+</script>
+{% endblock %}
   
   .tokens-section h3 {
     margin-top: 0;

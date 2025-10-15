@@ -5,10 +5,12 @@ FROM python:3.13.7-slim
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Install system dependencies
+# Install system dependencies including Node.js for building Tailwind CSS
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     sqlite3 \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user for security
@@ -23,8 +25,19 @@ USER downloader
 # Create app directory
 WORKDIR /app
 
+# Copy package files and install Node.js dependencies
+COPY --chown=downloader:downloader package*.json ./
+RUN npm ci
+
+# Copy Tailwind config and source files
+COPY --chown=downloader:downloader tailwind.config.js ./
+COPY --chown=downloader:downloader static/src ./static/src
+
+# Build Tailwind CSS
+RUN npm run build:css
+
 # Copy and install Python dependencies
-COPY requirements.txt .
+COPY --chown=downloader:downloader requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files

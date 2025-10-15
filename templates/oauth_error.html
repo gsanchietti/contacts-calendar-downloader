@@ -2,53 +2,51 @@
 
 {% block title %}Authorization Error{% endblock %}
 
-{% block head %}
-<style>
-  .error-header { text-align: center; margin-bottom: 30px; }
-  .error-icon { color: #ea4335; font-size: 4em; margin-bottom: 10px; }
-  .error-info { background-color: #fce8e6; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ea4335; }
-  .troubleshooting { background-color: #e8f0fe; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #1a73e8; }
-  .code { background-color: #f8f9fa; border: 1px solid #e1e4e8; border-radius: 6px; padding: 8px 12px; font-family: monospace; display:inline-block; }
-  .details { background-color:#f8f9fa; padding:15px; border-radius:6px; font-family:monospace; margin:15px 0; word-break:break-word }
-</style>
-{% endblock %}
-
 {% block content %}
-  <div class="container">
-    <div class="error-header">
-      <div class="error-icon">❌</div>
-      <h1>Authorization Failed</h1>
-      <p>There was a problem connecting your account.</p>
-    </div>
+  <div class="text-center mb-8">
+    <div class="text-6xl text-red-500 mb-4">❌</div>
+    <h1 class="text-3xl font-bold text-gray-800 mb-2">Authorization Failed</h1>
+    <p class="text-gray-600">There was a problem connecting your account.</p>
+  </div>
 
-    <div class="error-info">
-      <h3>Error Details</h3>
-      <p><strong>{{ error_message or error }}</strong></p>
-      {% if error_details %}
-        <div class="details">{{ error_details }}</div>
+  <div class="bg-red-50 border-l-4 border-red-500 p-5 rounded-lg mb-6">
+    <h3 class="text-lg font-semibold text-gray-800 mb-2">Error Details</h3>
+    <p class="text-gray-800 font-semibold">{{ error_message or error }}</p>
+    {% if error_details %}
+      <div class="bg-gray-100 p-4 rounded mt-3 font-mono text-sm break-all">{{ error_details }}</div>
+    {% endif %}
+  </div>
+
+  {% if troubleshooting %}
+    <div class="bg-primary-50 border-l-4 border-primary-600 p-5 rounded-lg mb-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-3">How to Fix This</h3>
+      {% if troubleshooting.error_type == 'redirect_uri_mismatch' %}
+        <p class="text-gray-700 mb-4">The redirect URI in your request doesn't match what's configured in Google Cloud Console.</p>
+        <div class="space-y-3">
+          <div class="flex gap-3">
+            <div class="flex-shrink-0 w-6 h-6 bg-primary-600 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
+            <div class="text-gray-700">
+              Go to <a href="{{ troubleshooting.google_cloud_console }}" target="_blank" class="text-primary-600 hover:underline">Google Cloud Console</a>
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <div class="flex-shrink-0 w-6 h-6 bg-primary-600 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
+            <div class="text-gray-700">
+              Add this URI to "Authorized redirect URIs":<br>
+              <code class="bg-gray-200 px-2 py-1 rounded text-sm mt-2 inline-block break-all">{{ troubleshooting.check_uri }}</code>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <p class="text-gray-700 mb-2"><strong>Solution:</strong> {{ troubleshooting.solution }}</p>
+        {% if troubleshooting.details %}
+          <div class="bg-gray-100 p-4 rounded mt-3 font-mono text-sm break-all">{{ troubleshooting.details }}</div>
+        {% endif %}
       {% endif %}
     </div>
+  {% endif %}
 
-    {% if troubleshooting %}
-      <div class="troubleshooting">
-        <h3>How to Fix This</h3>
-        {% if troubleshooting.error_type == 'redirect_uri_mismatch' %}
-          <p>The redirect URI in your request doesn't match what's configured in Google Cloud Console.</p>
-          <div class="solution-steps">
-            <div class="step">Go to <a href="{{ troubleshooting.google_cloud_console }}" target="_blank">Google Cloud Console</a></div>
-            <div class="step">Add this URI to "Authorized redirect URIs": <br><span class="code">{{ troubleshooting.check_uri }}</span></div>
-          </div>
-        {% else %}
-          <p><strong>Solution:</strong> {{ troubleshooting.solution }}</p>
-          {% if troubleshooting.details %}
-            <div class="details">{{ troubleshooting.details }}</div>
-          {% endif %}
-        {% endif %}
-      </div>
-    {% endif %}
-
-    <div class="actions">
-      <a href="/auth" class="btn">Try Again</a>
-    </div>
+  <div class="text-center">
+    <a href="/auth" class="inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors">Try Again</a>
   </div>
 {% endblock %}

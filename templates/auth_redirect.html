@@ -2,25 +2,21 @@
 
 {% block title %}Auth Redirect{% endblock %}
 
-{% block head %}
-<style>
-  .code { background:#f8f9fa;padding:12px;border-radius:6px;font-family:monospace;word-break:break-all }
-  .note { background:#e8f0fe;padding:15px;border-radius:8px;margin:20px 0;border-left:4px solid #1a73e8 }
-  .button { display:inline-block;background:#1a73e8;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none }
-</style>
-{% endblock %}
-
 {% block content %}
-  <div class="container">
-    <h1>Authorize {{ provider|default('Google') }}</h1>
-    <div>
-      <div>Authorization URL for <strong>{{ provider|default('Google') }}</strong>:</div>
-      <div class="code">{{ authorization_url }}</div>
-      <a class="button" href="{{ authorization_url }}" style="background-color:#0078d4">Open Authorization Page Now</a>
+  <div class="max-w-3xl mx-auto">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6">Authorize {{ provider|default('Google') }}</h1>
+    
+    <div class="mb-6">
+      <div class="text-gray-700 mb-3">Authorization URL for <strong>{{ provider|default('Google') }}</strong>:</div>
+      <div class="bg-gray-100 p-4 rounded-lg font-mono text-sm break-all mb-4">{{ authorization_url }}</div>
+      <a class="inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors" href="{{ authorization_url }}">
+        Open Authorization Page Now
+      </a>
     </div>
 
-    <div class="note">
-      <strong>Note:</strong> If you are an API client and expect JSON, call this endpoint with header <code>Accept: application/json</code> to receive JSON instead of HTML.
+    <div class="bg-primary-50 border-l-4 border-primary-600 p-4 rounded-lg">
+      <strong class="text-gray-800">Note:</strong>
+      <span class="text-gray-700">If you are an API client and expect JSON, call this endpoint with header <code class="bg-gray-200 px-2 py-1 rounded">Accept: application/json</code> to receive JSON instead of HTML.</span>
     </div>
   </div>
 {% endblock %}

@@ -2,135 +2,109 @@
 
 {% block title %}Privacy Policy{% endblock %}
 
-{% block head %}
-<style>
-    .container { max-width: 800px; margin: 30px auto; padding: 0 15px; }
-    h1 { margin-bottom: 10px; }
-    h2 { margin-top: 30px; color: #1a73e8; }
-    h3 { margin-top: 20px; }
-    p { color: #333; line-height: 1.6; }
-    .section { margin: 20px 0; }
-    .muted { color: #666; font-size: 0.9em; }
-    ul { padding-left: 20px; }
-    li { margin-bottom: 8px; }
-    .highlight {
-        background-color: #e8f0fe;
-        padding: 15px;
-        border-left: 4px solid #1a73e8;
-        margin: 20px 0;
-    }
-    .important {
-        background-color: #fef7e0;
-        padding: 15px;
-        border-left: 4px solid #f9ab00;
-        margin: 20px 0;
-    }
-</style>
-{% endblock %}
-
 {% block content %}
-    <div class="container">
-        <h1>Privacy Policy & Terms of Service</h1>
-        <p><strong>Last Updated:</strong> October 14, 2025</p>
+    <div class="max-w-4xl mx-auto prose prose-blue">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Privacy Policy & Terms of Service</h1>
+        <p class="text-gray-600 mb-6"><strong>Last Updated:</strong> October 14, 2025</p>
         
-        <p>This document outlines our Privacy Policy and Terms of Service for <strong>Contacts & Calendar Downloader</strong> (referred to as "we," "us," or "our") when you use our software (the "Service").</p>
+        <p class="text-gray-700 leading-relaxed mb-4">This document outlines our Privacy Policy and Terms of Service for <strong>Contacts & Calendar Downloader</strong> (referred to as "we," "us," or "our") when you use our software (the "Service").</p>
         
-        <p>We respect your privacy and are committed to protecting it through our compliance with this policy. By using our Service, you agree to the terms outlined in this document.</p>
+        <p class="text-gray-700 leading-relaxed mb-8">We respect your privacy and are committed to protecting it through our compliance with this policy. By using our Service, you agree to the terms outlined in this document.</p>
 
-        <h1>PRIVACY POLICY</h1>
+        <h1 class="text-2xl font-bold text-gray-900 mt-8 mb-4">PRIVACY POLICY</h1>
 
-        <h2>1. Information We Access and How We Use It</h2>
+        <h2 class="text-xl font-semibold text-primary-600 mt-6 mb-3">1. Information We Access and How We Use It</h2>
         
-        <p>Our Service is designed to interact with your Google and Microsoft accounts to provide you with contact and calendar download functionalities.</p>
+        <p class="text-gray-700 leading-relaxed mb-4">Our Service is designed to interact with your Google and Microsoft accounts to provide you with contact and calendar download functionalities.</p>
 
-        <h3>Account Data Access and Scope</h3>
+        <h3 class="text-lg font-semibold text-gray-800 mt-5 mb-2">Account Data Access and Scope</h3>
         
-        <p>When you connect your account, you grant our Service permission to access specific information. We access this data solely for the purpose of operating the Service for you.</p>
+        <p class="text-gray-700 leading-relaxed mb-4">When you connect your account, you grant our Service permission to access specific information. We access this data solely for the purpose of operating the Service for you.</p>
 
-        <p>The specific data we may access includes:</p>
-        <ul>
+        <p class="text-gray-700 leading-relaxed mb-2">The specific data we may access includes:</p>
+        <ul class="list-disc pl-6 mb-4 space-y-2 text-gray-700">
             <li><strong>Email Address:</strong> Your primary email address associated with your account.</li>
             <li><strong>Profile Information:</strong> Basic profile information (e.g., name, profile picture).</li>
             <li><strong>Contacts:</strong> Access to your personal contacts list.</li>
             <li><strong>Calendar:</strong> Access to your calendar events.</li>
         </ul>
 
-        <div class="highlight">
-            <p><strong>Crucially, our access to all of your information—including your Email, Profile, Contacts, and Calendar—is strictly Read-Only.</strong> We cannot modify, delete, or add any data to your account.</p>
+        <div class="bg-primary-50 border-l-4 border-primary-600 p-4 rounded-lg my-6">
+            <p class="text-gray-800 font-medium"><strong>Crucially, our access to all of your information—including your Email, Profile, Contacts, and Calendar—is strictly Read-Only.</strong> We cannot modify, delete, or add any data to your account.</p>
         </div>
 
-        <h3>Purpose of Access</h3>
-        <ul>
+        <h3 class="text-lg font-semibold text-gray-800 mt-5 mb-2">Purpose of Access</h3>
+        <ul class="list-disc pl-6 mb-4 space-y-2 text-gray-700">
             <li><strong>Contacts Access:</strong> The Service requires read-only access to your contacts to allow you to download and export them.</li>
             <li><strong>Calendar Access:</strong> The Service requires read-only access to your calendar to allow you to download and export events.</li>
             <li><strong>Email and Profile Access:</strong> This is used for user authentication, personalization, and to identify you as the Service user.</li>
         </ul>
 
-        <h3>Data Storage and Retention</h3>
+        <h3 class="text-lg font-semibold text-gray-800 mt-5 mb-2">Data Storage and Retention</h3>
 
-        <div class="important">
-            <p><strong>We do not save your personal contact list, calendar events, or any contact details on our servers.</strong></p>
+        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg my-6">
+            <p class="text-gray-800 font-medium"><strong>We do not save your personal contact list, calendar events, or any contact details on our servers.</strong></p>
         </div>
 
-        <p>We only store an <strong>authentication token</strong> provided by your OAuth provider. This token is a secure, unique key that allows our Service to make authorized, read-only requests on your behalf without us ever needing to store or see your actual password.</p>
+        <p class="text-gray-700 leading-relaxed mb-4">We only store an <strong>authentication token</strong> provided by your OAuth provider. This token is a secure, unique key that allows our Service to make authorized, read-only requests on your behalf without us ever needing to store or see your actual password.</p>
 
-        <ul>
+        <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
             <li><strong>The Token:</strong> The token is <strong>encrypted using AES encryption</strong> and stored securely in our database. It is solely used to contact your provider's APIs to access the explicitly permitted data points mentioned above.</li>
         </ul>
 
-        <h2>2. Your Control and Data Revocation</h2>
+        <h2 class="text-xl font-semibold text-primary-600 mt-6 mb-3">2. Your Control and Data Revocation</h2>
 
-        <h3>Revocation of Access</h3>
+        <h3 class="text-lg font-semibold text-gray-800 mt-5 mb-2">Revocation of Access</h3>
 
-        <p>You have the right to <strong>revoke our access</strong> to your account data at any time.</p>
+        <p class="text-gray-700 leading-relaxed mb-3">You have the right to <strong>revoke our access</strong> to your account data at any time.</p>
 
-        <ul>
+        <ul class="list-disc pl-6 mb-4 space-y-2 text-gray-700">
             <li>You can disconnect your account from our Service by using the management URL provided after authorization, or;</li>
             <li>You can manage and revoke the permissions granted through your provider's security settings page.</li>
         </ul>
 
-        <p>Revoking access will immediately disable the Service's ability to access your contacts, calendar, email, or profile information. If you revoke access, we will immediately delete the stored authentication token.</p>
+        <p class="text-gray-700 leading-relaxed mb-6">Revoking access will immediately disable the Service's ability to access your contacts, calendar, email, or profile information. If you revoke access, we will immediately delete the stored authentication token.</p>
 
-        <h2>3. Data Security</h2>
+        <h2 class="text-xl font-semibold text-primary-600 mt-6 mb-3">3. Data Security</h2>
 
-        <p>We implement appropriate technical and organizational security measures to protect your data:</p>
-        <ul>
+        <p class="text-gray-700 leading-relaxed mb-2">We implement appropriate technical and organizational security measures to protect your data:</p>
+        <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
             <li>All authentication tokens are encrypted using AES encryption before storage</li>
             <li>Our database uses WAL mode for improved concurrent access and data integrity</li>
             <li>We use HTTPS for all communications</li>
             <li>Access tokens automatically expire and are cleaned up</li>
         </ul>
 
-        <h2>4. Data Sharing</h2>
+        <h2 class="text-xl font-semibold text-primary-600 mt-6 mb-3">4. Data Sharing</h2>
 
-        <p>We do not sell, trade, or otherwise transfer your personal information to third parties. The only data sharing that occurs is:</p>
-        <ul>
+        <p class="text-gray-700 leading-relaxed mb-2">We do not sell, trade, or otherwise transfer your personal information to third parties. The only data sharing that occurs is:</p>
+        <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
             <li>Communication with your provider's APIs using your encrypted authentication token to fetch your data</li>
             <li>No third-party analytics or tracking services are used</li>
         </ul>
 
-        <h2>5. Children's Privacy</h2>
+        <h2 class="text-xl font-semibold text-primary-600 mt-6 mb-3">5. Children's Privacy</h2>
 
-        <p>Our Service is not intended for use by anyone under the age of 13. We do not knowingly collect personally identifiable information from children under 13.</p>
+        <p class="text-gray-700 leading-relaxed mb-8">Our Service is not intended for use by anyone under the age of 13. We do not knowingly collect personally identifiable information from children under 13.</p>
 
-        <h1>TERMS OF SERVICE</h1>
+        <h1 class="text-2xl font-bold text-gray-900 mt-10 mb-4">TERMS OF SERVICE</h1>
 
-        <p>By using the Contacts & Calendar Downloader (the "Service"), you agree to be bound by these Terms of Service.</p>
+        <p class="text-gray-700 leading-relaxed mb-6">By using the Contacts & Calendar Downloader (the "Service"), you agree to be bound by these Terms of Service.</p>
 
-        <h2>1. Acceptance and Agreement</h2>
-        <p>Your use of this Service constitutes acceptance of these Terms of Service. If you do not agree to these terms, please do not use the Service.</p>
+        <h2 class="text-xl font-semibold text-primary-600 mt-6 mb-3">1. Acceptance and Agreement</h2>
+        <p class="text-gray-700 leading-relaxed mb-6">Your use of this Service constitutes acceptance of these Terms of Service. If you do not agree to these terms, please do not use the Service.</p>
 
-        <h2>2. Permitted Use</h2>
-        <p>You may use this Service to:</p>
-        <ul>
+        <h2 class="text-xl font-semibold text-primary-600 mt-6 mb-3">2. Permitted Use</h2>
+        <p class="text-gray-700 leading-relaxed mb-2">You may use this Service to:</p>
+        <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
             <li>Authenticate with your Google or Microsoft Account to access your contacts and calendar</li>
             <li>Download and export your personal data</li>
             <li>Use the Service for personal, educational, or legitimate business purposes</li>
         </ul>
 
-        <h2>3. Prohibited Activities</h2>
-        <p>You agree NOT to:</p>
-        <ul>
+        <h2 class="text-xl font-semibold text-primary-600 mt-6 mb-3">3. Prohibited Activities</h2>
+        <p class="text-gray-700 leading-relaxed mb-2">You agree NOT to:</p>
+        <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
             <li>Use the Service for any illegal or unauthorized purposes</li>
             <li>Attempt to gain unauthorized access to other users' data</li>
             <li>Reverse engineer, decompile, or attempt to extract source code</li>
@@ -138,20 +112,20 @@
             <li>Use the Service in a way that could damage, disable, or impair the Service</li>
         </ul>
 
-        <h2>4. Limitation of Liability</h2>
-        <p>The Service is provided "as is" without warranties of any kind. To the maximum extent permitted by law:</p>
-        <ul>
+        <h2 class="text-xl font-semibold text-primary-600 mt-6 mb-3">4. Limitation of Liability</h2>
+        <p class="text-gray-700 leading-relaxed mb-2">The Service is provided "as is" without warranties of any kind. To the maximum extent permitted by law:</p>
+        <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
             <li>We are not liable for any direct, indirect, or consequential damages</li>
             <li>We do not guarantee uninterrupted or error-free service</li>
             <li>Your use of the Service is at your own risk</li>
         </ul>
 
-        <h2>5. Changes to This Privacy Policy and Terms</h2>
+        <h2 class="text-xl font-semibold text-primary-600 mt-6 mb-3">5. Changes to This Privacy Policy and Terms</h2>
 
-        <p>We may update our Privacy Policy and Terms of Service from time to time. We will notify you of any changes by posting the updated version on this page and updating the "Last Updated" date at the top of this document.</p>
+        <p class="text-gray-700 leading-relaxed mb-6">We may update our Privacy Policy and Terms of Service from time to time. We will notify you of any changes by posting the updated version on this page and updating the "Last Updated" date at the top of this document.</p>
 
-        <h2>6. Contact</h2>
+        <h2 class="text-xl font-semibold text-primary-600 mt-6 mb-3">6. Contact</h2>
 
-        <p>If you have any questions about this Privacy Policy or Terms of Service, please contact us through our GitHub repository.</p>
+        <p class="text-gray-700 leading-relaxed">If you have any questions about this Privacy Policy or Terms of Service, please contact us through our GitHub repository.</p>
     </div>
 {% endblock %}

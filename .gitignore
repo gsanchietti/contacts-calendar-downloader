@@ -46,6 +46,15 @@ venv/
 env/
 ENV/
 
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Tailwind CSS build output (uncomment if you want to build in CI/CD instead of committing)
+# static/dist/
+
 # IDE
 .vscode/
 .idea/

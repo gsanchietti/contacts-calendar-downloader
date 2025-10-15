@@ -3,107 +3,129 @@
 {% block title %}Contacts & Calendar Downloader{% endblock %}
 
 {% block content %}
-    <div class="header">
-        <div class="logo"><img src="{{ url_for('static', filename='favicon.png') }}" alt="Logo" width="96" height="96"></div>
-        <h1>Contacts & Calendar Downloader</h1>
-        <p class="subtitle">Secure, multi-tenant service for downloading contacts and calendar data from Google and Microsoft with read-only access</p>
+    <div class="text-center mb-8">
+        <div class="mb-4">
+            <img src="{{ url_for('static', filename='favicon.png') }}" alt="Logo" width="96" height="96" class="inline-block">
+        </div>
+        <h1 class="text-4xl font-bold text-primary-600 mb-4">Contacts & Calendar Downloader</h1>
+        <p class="text-xl text-gray-600">Secure, multi-tenant service for downloading contacts and calendar data from Google and Microsoft with read-only access</p>
     </div>
 
-
-    <div class="quick-start">
-        <h3>Quick Start Guide</h3>
+    <div class="bg-primary-50 border-l-4 border-primary-600 p-6 rounded-lg mb-8">
+        <h3 class="text-xl font-semibold text-gray-800 mb-4">Quick Start Guide</h3>
         
-        <div class="step">
-            <strong>Start Authorization</strong><br>
-            Click "Get Started" below to begin the OAuth flow and get your authorization URL
-        </div>
-        
-        <div class="step">
-            <strong>Authorize with Google or Microsoft</strong><br>
-            Visit the authorization URL in your browser and grant read-only access to your contacts
-        </div>
-        
-        <div class="step">
-            <strong>Get Your Export URLs</strong><br>
-            After authorization, you'll receive multiple export URLs for contacts and calendar data.
-            You are also provided with a Bearer token to authenticate API requests.
-        </div>
-        
-        <div class="step">
-            <strong>Download Contacts</strong><br>
-            Use the provided URLs or integrate the API into your application to download your contacts
-        </div>
-    </div>
-
-    <h2>Get Started</h2>
-
-    <div class="actions">
-        <a href="/auth?provider=google" class="btn">Authorize with Google</a>
-        <a href="/auth?provider=microsoft" class="btn">Authorize with Microsoft</a>
-    </div>
-
-    <div class="security-notice">
-        <span class="security-icon">🔒</span>
-        <strong>Read-Only Access:</strong> This service only requests read-only access to your Google and Microsoft accounts. 
-        The service cannot modify, delete, or add any data to your account.
-    </div>
-
-    <h2>Features</h2>
-
-    <div class="feature-grid">
-        <div class="feature-card">
-            <div class="feature-title">
-                <span class="feature-icon">🌐</span>Multi-Provider Support
+        <div class="space-y-4">
+            <div class="flex gap-4">
+                <div class="flex-shrink-0 w-8 h-8 bg-primary-600 text-white rounded-full flex items-center justify-center font-bold text-sm">1</div>
+                <div>
+                    <strong class="text-gray-800">Start Authorization</strong><br>
+                    <span class="text-gray-600">Click "Get Started" below to begin the OAuth flow and get your authorization URL</span>
+                </div>
             </div>
-            <p>Authenticate with Google or Microsoft to download contacts and calendar data from either provider.</p>
-        </div>
-
-        <div class="feature-card">
-            <div class="feature-title">
-                <span class="feature-icon">🔐</span>Secure Database Storage
+            
+            <div class="flex gap-4">
+                <div class="flex-shrink-0 w-8 h-8 bg-primary-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</div>
+                <div>
+                    <strong class="text-gray-800">Authorize with Google or Microsoft</strong><br>
+                    <span class="text-gray-600">Visit the authorization URL in your browser and grant read-only access to your contacts</span>
+                </div>
             </div>
-            <p>SQLite database with AES encryption stores tokens securely. No contact data is ever saved on our servers.</p>
-        </div>
-        
-        <div class="feature-card">
-            <div class="feature-title">
-                <span class="feature-icon">🔑</span>Bearer Token Authentication
+            
+            <div class="flex gap-4">
+                <div class="flex-shrink-0 w-8 h-8 bg-primary-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</div>
+                <div>
+                    <strong class="text-gray-800">Get Your Export URLs</strong><br>
+                    <span class="text-gray-600">After authorization, you'll receive multiple export URLs for contacts and calendar data. You are also provided with a Bearer token to authenticate API requests.</span>
+                </div>
             </div>
-            <p>JWT-like access tokens provide secure API access with automatic token refresh and easy revocation.</p>
-        </div>
-        
-        <div class="feature-card">
-            <div class="feature-title">
-                <span class="feature-icon">📊</span>Multiple Export Formats
+            
+            <div class="flex gap-4">
+                <div class="flex-shrink-0 w-8 h-8 bg-primary-600 text-white rounded-full flex items-center justify-center font-bold text-sm">4</div>
+                <div>
+                    <strong class="text-gray-800">Download Contacts</strong><br>
+                    <span class="text-gray-600">Use the provided URLs or integrate the API into your application to download your contacts</span>
+                </div>
             </div>
-            <p>Download your contacts in CSV or JSON format and calendar events in ICS format. Perfect for data analysis, backup, or migration purposes.</p>
         </div>
     </div>
 
-    <h3>Available Endpoints</h3>
-    <ul class="endpoints-list compact">
-        <li>
-            <code>/auth?provider=google|microsoft</code> — Start OAuth and get the authorization URL (use provider param).
-            <br><small>Callback: <code>/auth/callback?provider=...</code> — issues encrypted tokens and export URLs.</small>
+    <h2 class="text-2xl font-bold text-gray-800 mb-6">Get Started</h2>
+
+    <div class="text-center mb-8">
+        <a href="/auth?provider=google" class="inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors mr-4 mb-2">
+            Authorize with Google
+        </a>
+        <a href="/auth?provider=microsoft" class="inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors mb-2">
+            Authorize with Microsoft
+        </a>
+    </div>
+
+    <div class="bg-cyan-50 border-l-4 border-cyan-400 p-4 rounded-lg mb-8">
+        <span class="text-2xl mr-2">🔒</span>
+        <strong class="text-gray-800">Read-Only Access:</strong>
+        <span class="text-gray-700">This service only requests read-only access to your Google and Microsoft accounts. The service cannot modify, delete, or add any data to your account.</span>
+    </div>
+
+    <h2 class="text-2xl font-bold text-gray-800 mb-6">Features</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="bg-gray-50 border-l-4 border-primary-600 p-5 rounded-lg">
+            <div class="flex items-center mb-3">
+                <span class="text-2xl mr-3">🌐</span>
+                <h3 class="text-lg font-semibold text-primary-600">Multi-Provider Support</h3>
+            </div>
+            <p class="text-gray-700">Authenticate with Google or Microsoft to download contacts and calendar data from either provider.</p>
+        </div>
+
+        <div class="bg-gray-50 border-l-4 border-primary-600 p-5 rounded-lg">
+            <div class="flex items-center mb-3">
+                <span class="text-2xl mr-3">🔐</span>
+                <h3 class="text-lg font-semibold text-primary-600">Secure Database Storage</h3>
+            </div>
+            <p class="text-gray-700">SQLite database with AES encryption stores tokens securely. No contact data is ever saved on our servers.</p>
+        </div>
+        
+        <div class="bg-gray-50 border-l-4 border-primary-600 p-5 rounded-lg">
+            <div class="flex items-center mb-3">
+                <span class="text-2xl mr-3">🔑</span>
+                <h3 class="text-lg font-semibold text-primary-600">Bearer Token Authentication</h3>
+            </div>
+            <p class="text-gray-700">JWT-like access tokens provide secure API access with automatic token refresh and easy revocation.</p>
+        </div>
+        
+        <div class="bg-gray-50 border-l-4 border-primary-600 p-5 rounded-lg">
+            <div class="flex items-center mb-3">
+                <span class="text-2xl mr-3">📊</span>
+                <h3 class="text-lg font-semibold text-primary-600">Multiple Export Formats</h3>
+            </div>
+            <p class="text-gray-700">Download your contacts in CSV or JSON format and calendar events in ICS format. Perfect for data analysis, backup, or migration purposes.</p>
+        </div>
+    </div>
+
+    <h3 class="text-xl font-semibold text-gray-800 mb-4">Available Endpoints</h3>
+    <ul class="space-y-3 text-sm">
+        <li class="bg-gray-50 p-3 rounded border-l-4 border-gray-300">
+            <code class="bg-gray-200 px-2 py-1 rounded text-gray-800">/auth?provider=google|microsoft</code> — Start OAuth and get the authorization URL (use provider param).
+            <br><small class="text-gray-600 ml-2">Callback: <code class="bg-gray-200 px-1 rounded">/auth/callback?provider=...</code> — issues encrypted tokens and export URLs.</small>
         </li>
 
-        <li>
-            <code>/download/contacts?format=csv|json&export_id=...</code> — Download contacts in CSV or JSON.
-            <br><small><strong>Requires:</strong> Authorization: Bearer &mdash; read-only contacts scope.</small>
+        <li class="bg-gray-50 p-3 rounded border-l-4 border-gray-300">
+            <code class="bg-gray-200 px-2 py-1 rounded text-gray-800">/download/contacts?format=csv|json&export_id=...</code> — Download contacts in CSV or JSON.
+            <br><small class="text-gray-600 ml-2"><strong>Requires:</strong> Authorization: Bearer — read-only contacts scope.</small>
         </li>
 
-        <li>
-            <code>/download/calendar?format=ics&export_id=...</code> — Download calendar events in ICS.
-            <br><small><strong>Requires:</strong> Authorization: Bearer &mdash; calendar scope.</small>
+        <li class="bg-gray-50 p-3 rounded border-l-4 border-gray-300">
+            <code class="bg-gray-200 px-2 py-1 rounded text-gray-800">/download/calendar?format=ics&export_id=...</code> — Download calendar events in ICS.
+            <br><small class="text-gray-600 ml-2"><strong>Requires:</strong> Authorization: Bearer — calendar scope.</small>
         </li>
 
-        <li>
-            <code>/manage/tokens</code> — List and revoke Bearer tokens for your exports.
-            <br><small><strong>Requires:</strong> Authorization: Bearer.</small>
+        <li class="bg-gray-50 p-3 rounded border-l-4 border-gray-300">
+            <code class="bg-gray-200 px-2 py-1 rounded text-gray-800">/manage/tokens</code> — List and revoke Bearer tokens for your exports.
+            <br><small class="text-gray-600 ml-2"><strong>Requires:</strong> Authorization: Bearer.</small>
         </li>
 
-        <li>
-            <code>/metrics</code> — Prometheus metrics for monitoring (read-only).
+        <li class="bg-gray-50 p-3 rounded border-l-4 border-gray-300">
+            <code class="bg-gray-200 px-2 py-1 rounded text-gray-800">/metrics</code> — Prometheus metrics for monitoring (read-only).
         </li>
     </ul>
 {% endblock %}
