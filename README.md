@@ -15,54 +15,11 @@ Access your data in CSV, JSON, or ICS formats via a simple public URL (or API en
 ✅ **Beautiful Web Interface** - Professional UI with quick start guide  
 ✅ **Privacy Policy & Terms of Service** - Built-in legal documentation
 
-## Quick Start
-
-### Prerequisites
-
-- Python 3.9 or newer
-- PostgreSQL 12 or newer
-- OAuth 2.0 credentials from Google Cloud and/or Microsoft Azure
-- See [Provider Setup Guide](docs/providers.md) for detailed configuration instructions
-
-### Local Development Setup
-
-```bash
-# 1. Install dependencies
-pip install -r requirements.txt
-
-# 2. Configure environment variables
-export POSTGRES_HOST=localhost
-export POSTGRES_PORT=5432
-export POSTGRES_DB=contacts_calendar_downloader
-export POSTGRES_USER=postgres
-export POSTGRES_PASSWORD=your_secure_password
-
-# 3. Configure Google and Microsoft credentials, save the JSON files locally
-# See the Provider Setup documentation for details
-mkdir -p credentials
-# Save your credentials files as:
-# credentials/google.json
-# credentials/microsoft.json
-export GOOGLE_CREDENTIALS=./credentials/google.json
-export MICROSOFT_CREDENTIALS=./credentials/microsoft.json
-
-# 5. Start the service
-python downloader.py
-
-# 6. Visit the web interface
-# Open http://localhost:5000/ in your browser
-
-# 7. Or use the API directly
-curl http://localhost:5000/auth?provider=google | jq -r '.authorization_url'
-# Open the URL, authorize, then use the access token to download data
-```
-
-The service runs on `http://localhost:5000` by default. For production deployment, environment variables, and advanced configuration, see the [Deployment Guide](docs/deployment.md) and [Advanced Configuration](docs/advanced.md).
-
 ## Documentation
 
 📚 **Complete Documentation:**
 
+- **[Local Development Guide](docs/local-development.md)** - Setup for local development including Tailwind CSS
 - **[API Reference](docs/api.md)** - Endpoints, authentication, and data formats
 - **[Provider Setup](docs/providers.md)** - Google Cloud and Microsoft Azure configuration
 - **[Deployment Guide](docs/deployment.md)** - Production deployment and operations
