@@ -1,12 +1,19 @@
-"""Local, per-user file store for OAuth account records.
+"""Local file store for OAuth account records.
 
 Every linked account is a single JSON file under the config directory. Files
 are written atomically and are never world- or group-readable: they hold a
 refresh token that is equivalent to a password for the user's contacts and
 calendar data.
+
+The service is multi-threaded, so token refreshes are serialised per account
+(see ``get_access_token``). Everything else here is either read-only or an
+atomic replace, which needs no locking.
 """
+import hmac
 import os
+import secrets
 import sys
+import threading
 import time
 import urllib.parse
 from pathlib import Path
@@ -46,8 +53,8 @@ def account_path(provider: str, email: str) -> Path:
     return accounts_dir() / filename
 
 
-def save(record: Dict[str, Any]) -> Path:
-    """Persist an account record atomically, with 0600 permissions.
+def write_private(path: Path, text: str) -> Path:
+    """Write ``text`` to ``path`` atomically, with 0600 permissions.
 
     Writes to a temp file in the same directory (so the final ``os.replace``
     is an atomic rename on the same filesystem) using ``os.open`` with
@@ -55,29 +62,30 @@ def save(record: Dict[str, Any]) -> Path:
     never ``open()`` followed by a separate ``chmod()``, which would leave a
     brief window where the file has default (world-readable) permissions.
     """
-    import json
-
-    provider = record["provider"]
-    email = record["email"]
-    target = account_path(provider, email)
-    directory = target.parent
-
-    tmp_name = f".{target.name}.{os.getpid()}.{int(time.time() * 1000)}.tmp"
+    directory = path.parent
+    tmp_name = f".{path.name}.{os.getpid()}.{int(time.time() * 1000)}.tmp"
     tmp_path = directory / tmp_name
 
     fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
         with os.fdopen(fd, "w") as fh:
-            json.dump(record, fh, indent=2)
-            fh.write("\n")
-        os.replace(str(tmp_path), str(target))
+            fh.write(text)
+        os.replace(str(tmp_path), str(path))
     except BaseException:
         try:
             os.unlink(str(tmp_path))
         except OSError:
             pass
         raise
-    return target
+    return path
+
+
+def save(record: Dict[str, Any]) -> Path:
+    """Persist an account record atomically, with 0600 permissions."""
+    import json
+
+    target = account_path(record["provider"], record["email"])
+    return write_private(target, json.dumps(record, indent=2) + "\n")
 
 
 def load(provider: str, email: str) -> Optional[Dict[str, Any]]:
@@ -134,11 +142,83 @@ def delete(provider: str, email: str) -> bool:
     return True
 
 
+# --------------------------------------------------------------------------- #
+# Download tokens
+# --------------------------------------------------------------------------- #
+
+def new_download_token() -> str:
+    """Return a fresh 256-bit URL-safe download token."""
+    return secrets.token_urlsafe(32)
+
+
+def ensure_download_token(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Give ``record`` a download token if it has none, persisting it.
+
+    Accounts linked before the HTTP service existed have no token; rather
+    than force a re-login, mint one the first time they are looked at.
+    """
+    if record.get("download_token"):
+        return record
+    updated = dict(record)
+    updated["download_token"] = new_download_token()
+    updated["updated_at"] = time.time()
+    save(updated)
+    return updated
+
+
+def rotate_download_token(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Replace the record's download token, invalidating the old URLs."""
+    updated = dict(record)
+    updated["download_token"] = new_download_token()
+    updated["updated_at"] = time.time()
+    save(updated)
+    return updated
+
+
+def find_by_download_token(token: str) -> Optional[Dict[str, Any]]:
+    """Return the account a download token belongs to, or None.
+
+    Compared with ``hmac.compare_digest`` so a wrong token cannot be guessed
+    a character at a time from response timing. There are only ever a handful
+    of accounts, so a linear scan needs no index.
+    """
+    if not token:
+        return None
+    for record in list_accounts():
+        stored = record.get("download_token")
+        if stored and hmac.compare_digest(str(stored), token):
+            return record
+    return None
+
+
+# --------------------------------------------------------------------------- #
+# Access tokens
+# --------------------------------------------------------------------------- #
+
+_locks_guard = threading.Lock()
+_locks: Dict[str, threading.Lock] = {}
+
+
+def _account_lock(provider: str, email: str) -> threading.Lock:
+    key = f"{provider}\0{email}"
+    with _locks_guard:
+        lock = _locks.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _locks[key] = lock
+        return lock
+
+
 def get_access_token(record: Dict[str, Any]) -> str:
     """Return a valid access token for the record, refreshing if needed.
 
     Refreshes proactively (2 minutes before expiry) rather than waiting for
     the provider to reject an expired token.
+
+    Serialised per account, and the record is re-read from disk inside the
+    lock: Entra rotates the refresh token on every use, so two concurrent
+    refreshes of the same account would leave the loser holding a token the
+    provider has already retired.
     """
     from .errors import AuthExpiredError
 
@@ -146,19 +226,26 @@ def get_access_token(record: Dict[str, Any]) -> str:
         return record["access_token"]
 
     provider = record["provider"]
-    # Imported here, not at module scope, to avoid a circular import: the
-    # auth_* modules import store.config_root() (via client_config) at
-    # module load time.
-    if provider == "google":
-        from . import auth_google
+    email = record["email"]
 
-        refreshed = auth_google.refresh(record)
-    elif provider == "microsoft":
-        from . import auth_microsoft
+    with _account_lock(provider, email):
+        current = load(provider, email) or record
+        if time.time() < current.get("expires_at", 0) - 120:
+            return current["access_token"]
 
-        refreshed = auth_microsoft.refresh(record)
-    else:
-        raise AuthExpiredError(f"Unknown provider '{provider}'; run 'ccd login' again.")
+        # Imported here, not at module scope, to avoid a circular import: the
+        # auth_* modules import store.config_root() (via client_config) at
+        # module load time.
+        if provider == "google":
+            from . import auth_google
 
-    save(refreshed)
-    return refreshed["access_token"]
+            refreshed = auth_google.refresh(current)
+        elif provider == "microsoft":
+            from . import auth_microsoft
+
+            refreshed = auth_microsoft.refresh(current)
+        else:
+            raise AuthExpiredError(f"Unknown provider '{provider}'; log in again.")
+
+        save(refreshed)
+        return refreshed["access_token"]

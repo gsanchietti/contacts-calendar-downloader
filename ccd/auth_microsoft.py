@@ -1,9 +1,14 @@
 """Microsoft OAuth: RFC 8628 device authorization grant via MSAL.
 
 Unlike Google, Microsoft Graph's ``Contacts.Read`` / ``Calendars.Read``
-scopes work fine with the device-code flow, so we use it as-is: no loopback
-redirect, no browser dance -- the user visits a short URL on any device and
-types a code.
+scopes work fine with the device-code flow, so we keep using it: no redirect
+URI to register, no per-installation app registration change -- the user
+visits a short URL on any device and types a code.
+
+The flow spans two HTTP requests here too, so it is exposed as ``start()``
+(get a user code) and ``wait()`` (block until the user finishes). ``wait()``
+blocks for up to 15 minutes and is meant to be run on a background thread by
+``ccd/service.py``.
 """
 import time
 from typing import Any, Dict
@@ -27,29 +32,37 @@ _MSAL_SCOPES = ["User.Read", "Contacts.Read", "Calendars.Read"]
 GRAPH_ME_ENDPOINT = "https://graph.microsoft.com/v1.0/me"
 
 
-def login() -> Dict[str, Any]:
-    """Run the interactive device-code flow and return the saved record."""
+def _app():
     import msal
 
     from . import client_config
 
     cfg = client_config.require("microsoft")
-    app = msal.PublicClientApplication(cfg["client_id"], authority=cfg["authority"])
+    return msal.PublicClientApplication(cfg["client_id"], authority=cfg["authority"])
 
-    flow = app.initiate_device_flow(scopes=_MSAL_SCOPES)
+
+def start() -> Dict[str, Any]:
+    """Begin a device-code flow. Returns MSAL's flow dict.
+
+    The flow carries ``user_code``, ``verification_uri``, a human-readable
+    ``message`` and an ``expires_at``; the caller shows those to the user and
+    hands the same dict back to ``wait()``.
+    """
+    flow = _app().initiate_device_flow(scopes=_MSAL_SCOPES)
     if "user_code" not in flow:
-        raise CcdError(f"Could not start Microsoft device flow: {flow.get('error_description', flow)}")
+        raise CcdError(
+            f"Could not start Microsoft device flow: {flow.get('error_description', flow)}"
+        )
+    return flow
 
-    # flow["message"] already contains the full "go to https://microsoft.com/devicelogin
-    # and enter code XXXX-XXXX" instructions.
-    #
-    # flush=True is load-bearing: acquire_token_by_device_flow() then blocks for
-    # up to 15 minutes, and when stdout is a pipe rather than a terminal Python
-    # buffers this line until the process exits. Without the flush the user
-    # never sees the code they are supposed to type.
-    print(flow["message"], flush=True)
 
-    result = app.acquire_token_by_device_flow(flow)  # blocks, MSAL handles polling
+def wait(flow: Dict[str, Any]) -> Dict[str, Any]:
+    """Block until the user completes the flow; save and return the record.
+
+    MSAL does the polling and honours the flow's own expiry, so this returns
+    -- with an error -- within about 15 minutes even if the user walks away.
+    """
+    result = _app().acquire_token_by_device_flow(flow)
     if "access_token" not in result:
         raise CcdError(
             f"Microsoft sign-in failed: {result.get('error_description', result.get('error', result))}"
@@ -80,6 +93,8 @@ def login() -> Dict[str, Any]:
     if not email:
         raise CcdError("Could not determine the Microsoft account's email address.")
 
+    from . import store
+
     now = time.time()
     record = {
         "provider": "microsoft",
@@ -88,11 +103,17 @@ def login() -> Dict[str, Any]:
         "refresh_token": refresh_token,
         "expires_at": expires_at,
         "scopes": STORED_SCOPES,
+        "download_token": store.new_download_token(),
         "created_at": now,
         "updated_at": now,
     }
 
-    from . import store
+    # Re-linking an account keeps its download token, so URLs already handed
+    # out to other applications survive a re-consent.
+    existing = store.load("microsoft", email)
+    if existing and existing.get("download_token"):
+        record["download_token"] = existing["download_token"]
+        record["created_at"] = existing.get("created_at", now)
 
     store.save(record)
     return record
@@ -124,7 +145,7 @@ def refresh(record: Dict[str, Any]) -> Dict[str, Any]:
     if resp.status_code == 400 and "invalid_grant" in resp.text:
         raise AuthExpiredError(
             f"Microsoft refresh token for {record.get('email')} is no longer "
-            "valid. Run 'ccd login --provider microsoft' again."
+            "valid. Link the account again."
         )
     if resp.status_code != 200:
         raise AuthExpiredError(f"Failed to refresh Microsoft token: {resp.text}")

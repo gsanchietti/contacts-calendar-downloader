@@ -1,4 +1,4 @@
-"""OAuth client identifiers used by the CLI.
+"""OAuth client identifiers and service-level configuration.
 
 Google credentials are **not** shipped with this program. An installed app
 cannot keep a secret (RFC 8252 section 8.5), so a client embedded here would
@@ -15,19 +15,18 @@ nothing.
 Every value can be set through the environment, or through a JSON file:
 
     ~/.config/contacts-calendar-downloader/client_config.json
-    {"google": {"client_id": "...", "client_secret": "...",
-                "redirect_uri": "https://example.org/ccd/callback"},
+    {"google": {"client_id": "...", "client_secret": "..."},
      "microsoft": {"client_id": "...", "authority": "..."}}
-
-``redirect_uri`` is optional and empty by default; see ``google()`` below.
 """
 import json
 import os
-from typing import Any, Dict
+import secrets
+import urllib.parse
+from typing import Any, Dict, Tuple
 
 # --- Values baked into the distribution -------------------------------------
 # Google: intentionally empty. Set CCD_GOOGLE_CLIENT_ID / CCD_GOOGLE_CLIENT_SECRET
-# (or the "google" section of client_config.json) to the Desktop-app client of
+# (or the "google" section of client_config.json) to the Web-application client of
 # a Google Cloud project holding the sensitive-scope approval for
 # contacts.readonly / calendar.readonly. require("google") fails loudly with
 # that hint when they are unset.
@@ -38,6 +37,8 @@ _EMBEDDED_GOOGLE_CLIENT_SECRET = ""
 # enabled. Public clients have no secret at all.
 _EMBEDDED_MS_CLIENT_ID = "663ca2fe-4616-4340-8958-a2b5a5cd696d"
 _EMBEDDED_MS_AUTHORITY = "https://login.microsoftonline.com/common"
+
+DEFAULT_LISTEN = "127.0.0.1:8080"
 
 
 def _file_overrides() -> Dict[str, Any]:
@@ -66,20 +67,16 @@ def _pick(env_var: str, file_section: str, file_key: str, embedded: str) -> str:
 
 
 def google() -> Dict[str, str]:
-    """Return the Google client_id / client_secret / redirect_uri in use.
+    """Return the Google client_id / client_secret in use.
 
-    ``redirect_uri`` is empty unless an operator sets it. Empty means "use a
-    loopback redirect" (the default installed-app flow). Setting it to the
-    https URL of a hosted static callback page switches ``ccd login`` to that
-    page instead, which is friendlier for users who run ccd in a container or
-    over SSH, where the browser cannot reach the CLI's loopback address. Such
-    a URL requires an OAuth client of type "Web application"; Google rejects
+    The redirect URI is no longer configurable: the service hosts the
+    callback itself, at ``{base_url()}/oauth/callback``. That URL has to be
+    registered on an OAuth client of type "Web application" -- Google rejects
     https redirect URIs on "Desktop app" clients.
     """
     return {
         "client_id": _pick("CCD_GOOGLE_CLIENT_ID", "google", "client_id", _EMBEDDED_GOOGLE_CLIENT_ID),
         "client_secret": _pick("CCD_GOOGLE_CLIENT_SECRET", "google", "client_secret", _EMBEDDED_GOOGLE_CLIENT_SECRET),
-        "redirect_uri": _pick("CCD_GOOGLE_REDIRECT_URI", "google", "redirect_uri", ""),
     }
 
 
@@ -112,3 +109,73 @@ def require(provider: str) -> Dict[str, str]:
             f"Set {env_hint}, or add it to client_config.json in the config directory."
         )
     return cfg
+
+
+# --------------------------------------------------------------------------- #
+# Service configuration
+# --------------------------------------------------------------------------- #
+
+def listen_address(override: str = "") -> Tuple[str, int]:
+    """Parse CCD_LISTEN (or an explicit override) into (host, port)."""
+    from .errors import CcdError
+
+    raw = override or os.environ.get("CCD_LISTEN") or DEFAULT_LISTEN
+    host, _, port = raw.rpartition(":")
+    if not host or not port.isdigit():
+        raise CcdError(f"Invalid listen address '{raw}'; expected HOST:PORT.")
+    return host, int(port)
+
+
+def base_url(port: int = 0) -> str:
+    """Return the externally visible base URL, without a trailing slash.
+
+    May carry a path prefix (``https://voice.example.com/ccd``): ccd is
+    normally embedded under some other module's hostname, with Traefik
+    stripping the prefix before forwarding. Only *generated* URLs -- the
+    Google redirect URI and the per-account download links -- need the
+    prefix; routing never does, which is why this value is read here and
+    nowhere in the router.
+    """
+    configured = os.environ.get("CCD_BASE_URL", "").strip()
+    if configured:
+        return configured.rstrip("/")
+    return f"http://127.0.0.1:{port or listen_address()[1]}"
+
+
+def redirect_uri(port: int = 0) -> str:
+    """Return the OAuth redirect URI that must be registered with Google."""
+    return f"{base_url(port)}/oauth/callback"
+
+
+def download_urls(download_token: str, port: int = 0) -> Dict[str, str]:
+    """Return the three public download URLs for an account's token."""
+    base = f"{base_url(port)}/d/{urllib.parse.quote(download_token, safe='')}"
+    return {
+        "contacts_csv": f"{base}/contacts.csv",
+        "contacts_json": f"{base}/contacts.json",
+        "calendar_ics": f"{base}/calendar.ics",
+    }
+
+
+def ensure_api_key() -> Tuple[str, bool]:
+    """Return the API key protecting /api/*, creating one if needed.
+
+    Returns ``(key, created)``. Precedence is CCD_API_KEY, then a previously
+    generated ``api_key`` file in the config root, then a fresh key written
+    there with mode 0600.
+    """
+    from .store import config_root, write_private
+
+    from_env = os.environ.get("CCD_API_KEY", "").strip()
+    if from_env:
+        return from_env, False
+
+    path = config_root() / "api_key"
+    if path.exists():
+        existing = path.read_text().strip()
+        if existing:
+            return existing, False
+
+    key = secrets.token_urlsafe(32)
+    write_private(path, key + "\n")
+    return key, True

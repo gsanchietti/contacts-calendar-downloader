@@ -1,25 +1,24 @@
-"""Google OAuth: authorization-code + PKCE, without a local web server.
+"""Google OAuth: authorization-code + PKCE against the service's own callback.
 
 Google's device-code flow does not support the ``contacts.readonly`` /
 ``calendar.readonly`` scopes (it only allows a short allowlist such as
 email/openid/profile/drive.appdata/drive.file/youtube*), so we cannot use it
-here. What is left is the authorization-code flow -- but ccd runs on a
-server, where the browser is always on some other machine and can never
-reach a redirect URI this process listens on. So nothing is listened for:
-the user completes consent in their own browser and pastes the resulting
-URL into the terminal. Where that URL comes from is the only variable --
-either an operator-hosted static callback page (``redirect_uri`` in the
-client config) or, by default, the connection-refused page of a
-``http://127.0.0.1:<port>`` address nothing is bound to.
+here. The authorization-code flow is what is left, and now that ccd is an
+HTTP service there is somewhere for the browser to land: the service's own
+``/oauth/callback``. The redirect URI is derived from ``CCD_BASE_URL`` and
+must be registered on an OAuth client of type "Web application"; Google
+rejects https redirect URIs on "Desktop app" clients.
+
+``login()`` is deliberately absent -- the flow spans two HTTP requests, so it
+is exposed as ``start()`` (build the consent URL) and ``complete()`` (redeem
+the code Google sent back). ``ccd/service.py`` owns the state in between.
 """
 import base64
 import hashlib
-import hmac
-import random
 import secrets
 import time
 import urllib.parse
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from .errors import AuthExpiredError, CcdError
 
@@ -65,29 +64,18 @@ def _decode_jwt_payload(id_token: str) -> Dict[str, Any]:
     return json.loads(decoded)
 
 
-def login() -> Dict[str, Any]:
-    """Run the interactive PKCE flow and return the saved record.
+def start(redirect_uri: str, state: str) -> Tuple[str, Dict[str, Any]]:
+    """Build the consent URL. Returns ``(authorization_url, pending)``.
 
-    The user always pastes the post-consent URL back; see the module
-    docstring for why there is no listener to catch the redirect.
+    ``pending`` carries the PKCE verifier and the redirect URI, both of which
+    the token exchange in ``complete()`` needs; the caller keeps it until the
+    browser comes back.
     """
-    import requests
-
     from . import client_config
 
     cfg = client_config.require("google")
 
     verifier = _code_verifier()
-    challenge = _code_challenge(verifier)
-    state = secrets.token_urlsafe(24)
-
-    # An operator-hosted callback page, when configured; otherwise a loopback
-    # address with nothing bound to it, whose browser error page still carries
-    # the code in its address bar.
-    redirect_uri = cfg.get("redirect_uri") or "http://127.0.0.1:{0}".format(
-        random.randint(20000, 60000)
-    )
-
     params = {
         "client_id": cfg["client_id"],
         "redirect_uri": redirect_uri,
@@ -96,27 +84,29 @@ def login() -> Dict[str, Any]:
         "state": state,
         "access_type": "offline",
         "prompt": "consent",
-        "code_challenge": challenge,
+        "code_challenge": _code_challenge(verifier),
         "code_challenge_method": "S256",
     }
     auth_url = "{0}?{1}".format(AUTH_ENDPOINT, urllib.parse.urlencode(params))
+    return auth_url, {"verifier": verifier, "redirect_uri": redirect_uri}
 
-    code, returned_state = _authorize(auth_url, redirect_uri)
 
-    if returned_state is not None and not hmac.compare_digest(returned_state, state):
-        raise CcdError(
-            "State mismatch on the returned URL -- this can indicate a "
-            "hijacked or stale authorization response. Aborting."
-        )
+def complete(pending: Dict[str, Any], code: str) -> Dict[str, Any]:
+    """Redeem an authorization code and save the resulting account record."""
+    import requests
+
+    from . import client_config
+
+    cfg = client_config.require("google")
 
     token_resp = requests.post(
         TOKEN_ENDPOINT,
         data={
             "code": code,
-            "code_verifier": verifier,
-        "client_id": cfg["client_id"],
+            "code_verifier": pending["verifier"],
+            "client_id": cfg["client_id"],
             "client_secret": cfg["client_secret"],
-        "redirect_uri": redirect_uri,
+            "redirect_uri": pending["redirect_uri"],
             "grant_type": "authorization_code",
         },
         timeout=15,
@@ -153,6 +143,8 @@ def login() -> Dict[str, Any]:
     if not email:
         raise CcdError("Could not determine the Google account's email address.")
 
+    from . import store
+
     now = time.time()
     record = {
         "provider": "google",
@@ -161,50 +153,20 @@ def login() -> Dict[str, Any]:
         "refresh_token": refresh_token,
         "expires_at": expires_at,
         "scopes": SCOPES,
+        "download_token": store.new_download_token(),
         "created_at": now,
         "updated_at": now,
     }
 
-    from . import store
+    # Re-linking an account keeps its download token, so URLs already handed
+    # out to other applications survive a re-consent.
+    existing = store.load("google", email)
+    if existing and existing.get("download_token"):
+        record["download_token"] = existing["download_token"]
+        record["created_at"] = existing.get("created_at", now)
 
     store.save(record)
     return record
-
-
-def _authorize(auth_url, redirect_uri):
-    """Get the user through consent. Returns ``(code, state_or_None)``."""
-    print("Open this URL in a browser and sign in / grant access:\n")
-    print("  {0}\n".format(auth_url))
-    if redirect_uri.startswith("https://"):
-        print(
-            "After you approve, the browser lands on {0}, which shows the "
-            "authorization result and a button to copy the full URL. Paste "
-            "it below.\n".format(redirect_uri),
-            flush=True,
-        )
-    else:
-        print(
-            "After you approve, the browser will redirect to "
-            "{0}/... and show a \"This site can't be reached\" (or similar "
-            "connection-refused) error page. That is expected -- nothing is "
-            "listening on that port. Copy the full URL from the address bar "
-            "and paste it below.\n".format(redirect_uri),
-            flush=True,
-        )
-
-    pasted = input("Paste the redirected URL (or just the 'code' value): ").strip()
-    if not pasted:
-        raise CcdError("No input received; aborting login.")
-
-    if pasted.startswith("http://") or pasted.startswith("https://"):
-        parsed = urllib.parse.urlparse(pasted)
-        qs = urllib.parse.parse_qs(parsed.query)
-        if "error" in qs:
-            raise CcdError("Google returned an error: {0}".format(qs["error"][0]))
-        if "code" not in qs:
-            raise CcdError("No 'code' parameter found in the pasted URL.")
-        return qs["code"][0], qs.get("state", [None])[0]
-    return pasted, None
 
 
 def refresh(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -219,7 +181,7 @@ def refresh(record: Dict[str, Any]) -> Dict[str, Any]:
         TOKEN_ENDPOINT,
         data={
             "refresh_token": record["refresh_token"],
-        "client_id": cfg["client_id"],
+            "client_id": cfg["client_id"],
             "client_secret": cfg["client_secret"],
             "grant_type": "refresh_token",
         },
@@ -228,7 +190,7 @@ def refresh(record: Dict[str, Any]) -> Dict[str, Any]:
     if resp.status_code == 400 and "invalid_grant" in resp.text:
         raise AuthExpiredError(
             f"Google refresh token for {record.get('email')} is no longer "
-            "valid. Run 'ccd login --provider google' again."
+            "valid. Link the account again."
         )
     if resp.status_code != 200:
         raise AuthExpiredError(f"Failed to refresh Google token: {resp.text}")

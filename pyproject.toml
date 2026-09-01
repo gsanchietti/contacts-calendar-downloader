@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "contacts-calendar-downloader"
-version = "2.0.0"
-description = "Local CLI to download your own contacts and calendar from Google or Microsoft"
+version = "3.0.0"
+description = "Self-hosted service and CLI to download your own contacts and calendar from Google or Microsoft"
 readme = "README.md"
 license = { text = "GPL-3.0-only" }
 requires-python = ">=3.9"

@@ -3,6 +3,9 @@
 
 # Operator-provided OAuth client overrides (contains a client secret)
 client_config.json
+# Local shell env holding CCD_GOOGLE_CLIENT_SECRET. The 'env/' rule below
+# only covers a directory of that name, not this file.
+/env
 
 # Python
 __pycache__/
