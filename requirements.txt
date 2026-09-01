@@ -1,12 +1,7 @@
 google-api-python-client
+google-auth
 google-auth-httplib2
-google-auth-oauthlib
-Flask
-cryptography
-prometheus-client
-gunicorn
-icalendar
-python-dateutil
 msal
 requests
-psycopg2-binary
+icalendar
+python-dateutil
