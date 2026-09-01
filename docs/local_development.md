@@ -5,8 +5,8 @@
 - Python 3.9 or newer
 - Nothing else -- no database, no reverse proxy, no container runtime needed
   to develop or run the service
-- A Google OAuth client of your own; none is shipped. See
-  [providers.md](providers.md)
+- A Google OAuth client and a Microsoft OAuth client of your own. Neither is
+  shipped in the source tree. See [providers.md](providers.md)
 
 ## Setup
 
@@ -21,10 +21,19 @@ pip install -e .
 #    real ~/.config
 export CCD_CONFIG_DIR=$(pwd)/.ccd-config
 
-# 3. Your Google client (required to link a Google account)
+# 3. Your OAuth clients. Put them in the untracked `env` file at the repo
+#    root (.gitignore has /env) and source it -- never in ccd/client_config.py.
+cat > env <<'ENVEOF'
 export CCD_GOOGLE_CLIENT_ID=...apps.googleusercontent.com
 export CCD_GOOGLE_CLIENT_SECRET=GOCSPX-...
+export CCD_MS_CLIENT_ID=00000000-0000-0000-0000-000000000000
+ENVEOF
+
+set -a; . ./env; set +a
 ```
+
+`env` is deliberately untracked and holds a live client secret. Back it up
+somewhere you can restore it from -- nothing in the repo can regenerate it.
 
 ## Running the service
 

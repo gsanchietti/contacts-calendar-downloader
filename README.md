@@ -22,9 +22,14 @@ Python 3.9+ is required. This installs a `ccd` console script.
 
 ## Run the service
 
+No OAuth client of either provider is shipped in the source tree, so register
+your own first ([docs/providers.md](docs/providers.md)) and keep the values
+outside the repo:
+
 ```bash
-export CCD_GOOGLE_CLIENT_ID=...apps.googleusercontent.com   # see docs/providers.md
+export CCD_GOOGLE_CLIENT_ID=...apps.googleusercontent.com
 export CCD_GOOGLE_CLIENT_SECRET=GOCSPX-...
+export CCD_MS_CLIENT_ID=00000000-0000-0000-0000-000000000000
 ccd serve
 ```
 
@@ -44,8 +49,9 @@ in the config directory (mode `0600`); set `CCD_API_KEY` to supply your own.
 | `CCD_BASE_URL` | `http://127.0.0.1:<port>` | Externally visible base, **including any path prefix**. Every URL the service hands out is built from it, and it must match the redirect URI registered with Google. |
 | `CCD_API_KEY` | generated | Bearer key for `/api/*`. |
 | `CCD_CONFIG_DIR` | `~/.config/contacts-calendar-downloader` | Where accounts and the API key live. |
-| `CCD_GOOGLE_CLIENT_ID` / `CCD_GOOGLE_CLIENT_SECRET` | — | Required; no Google client is shipped. |
-| `CCD_MS_CLIENT_ID` / `CCD_MS_AUTHORITY` | embedded public client | Override only if you registered your own Entra app. |
+| `CCD_GOOGLE_CLIENT_ID` / `CCD_GOOGLE_CLIENT_SECRET` | — | Required to link a Google account. |
+| `CCD_MS_CLIENT_ID` | — | Required to link a Microsoft account. Public client, so there is no secret. |
+| `CCD_MS_AUTHORITY` | `https://login.microsoftonline.com/common` | Override only for a single-tenant Entra app. |
 
 ## The API
 

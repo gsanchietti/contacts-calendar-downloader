@@ -1,16 +1,17 @@
 """OAuth client identifiers and service-level configuration.
 
-Google credentials are **not** shipped with this program. An installed app
-cannot keep a secret (RFC 8252 section 8.5), so a client embedded here would
-be a public one -- workable, but it also means every copy of the source
-carries a live client id/secret pair, which secret scanners flag and which
-nobody can rotate without a release. Instead the operator who deploys ccd
-registers their own Google client and passes it in, per the "Google Cloud
-Setup" section of docs/providers.md.
+**No OAuth client of either provider is shipped with this program.** A
+committed client id is one nobody can rotate without a release, it ties every
+deployment to whoever registered it, and for Google it trips secret scanning
+on every push. The operator who deploys ccd registers their own clients and
+passes them in, per docs/providers.md.
 
-Microsoft is different: a public client registration has no secret at all,
-only a client id, so a default is embedded and users need to configure
-nothing.
+That applies to Microsoft too, even though a public client registration has no
+secret and its client id is therefore not a credential. It is still an
+identity: consent screens carry its name, Entra's rate limits and audit trail
+are per-application, and an id in the source tree cannot be replaced without
+shipping a new version. `require("microsoft")` fails loudly until one is set,
+the same way Google's does.
 
 Every value can be set through the environment, or through a JSON file:
 
@@ -25,18 +26,23 @@ import urllib.parse
 from typing import Any, Dict, Tuple
 
 # --- Values baked into the distribution -------------------------------------
-# Google: intentionally empty. Set CCD_GOOGLE_CLIENT_ID / CCD_GOOGLE_CLIENT_SECRET
-# (or the "google" section of client_config.json) to the Web-application client of
-# a Google Cloud project holding the sensitive-scope approval for
-# contacts.readonly / calendar.readonly. require("google") fails loudly with
-# that hint when they are unset.
+# Both client ids are intentionally empty; see the module docstring. Set them
+# through the environment (CCD_GOOGLE_CLIENT_ID / CCD_GOOGLE_CLIENT_SECRET /
+# CCD_MS_CLIENT_ID) or the matching section of client_config.json. require()
+# fails loudly with that hint when they are unset.
+#
+# Google wants the Web-application client of a project holding the
+# sensitive-scope approval for contacts.readonly / calendar.readonly.
+# Microsoft wants an app registration with "Allow public client flows"
+# enabled -- a public client, so there is no secret to go with it.
 _EMBEDDED_GOOGLE_CLIENT_ID = ""
 _EMBEDDED_GOOGLE_CLIENT_SECRET = ""
+_EMBEDDED_MS_CLIENT_ID = ""
 
-# Microsoft: multi-tenant app registration with "Allow public client flows"
-# enabled. Public clients have no secret at all.
-_EMBEDDED_MS_CLIENT_ID = "663ca2fe-4616-4340-8958-a2b5a5cd696d"
-_EMBEDDED_MS_AUTHORITY = "https://login.microsoftonline.com/common"
+# Not a client identifier: Microsoft's own multi-tenant endpoint, which works
+# for organizational and personal accounts alike. Only a single-tenant
+# registration needs to override it, via CCD_MS_AUTHORITY.
+_DEFAULT_MS_AUTHORITY = "https://login.microsoftonline.com/common"
 
 DEFAULT_LISTEN = "127.0.0.1:8080"
 
@@ -81,10 +87,15 @@ def google() -> Dict[str, str]:
 
 
 def microsoft() -> Dict[str, str]:
-    """Return the Microsoft client_id and authority in use."""
+    """Return the Microsoft client_id and authority in use.
+
+    The client id has no default and must be supplied; the authority does,
+    because it is Microsoft's endpoint rather than anything of the
+    operator's.
+    """
     return {
         "client_id": _pick("CCD_MS_CLIENT_ID", "microsoft", "client_id", _EMBEDDED_MS_CLIENT_ID),
-        "authority": _pick("CCD_MS_AUTHORITY", "microsoft", "authority", _EMBEDDED_MS_AUTHORITY),
+        "authority": _pick("CCD_MS_AUTHORITY", "microsoft", "authority", _DEFAULT_MS_AUTHORITY),
     }
 
 

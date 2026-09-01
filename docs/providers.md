@@ -4,10 +4,17 @@ Registering the OAuth clients `ccd` uses is a one-time job for whoever
 deploys the service. End users never see it -- they only ever click through
 a consent screen.
 
-Two things are needed: a **Google** client (none is shipped -- see below) and,
-optionally, your own **Microsoft** client (a working public one is embedded,
-so you can skip that section entirely unless you forked the project or need
-a single-tenant app).
+**No client of either provider is shipped in the source tree.** You register a
+Google client and a Microsoft client, and both sections below are required
+before the matching `ccd login` works. Keep the values outside the repository:
+the environment, or `client_config.json` in the config directory. The repo
+ships an untracked `env` file for exactly this (see
+[local_development.md](local_development.md)).
+
+The two registrations differ in one way worth knowing up front: the Google one
+is **per installation**, because it must carry that installation's redirect
+URI. The Microsoft one is not -- device-code uses no redirect URI, so one
+registration serves every deployment you run.
 
 ## Why the two providers use different flows
 
@@ -104,7 +111,7 @@ a single-tenant app).
    always `{CCD_BASE_URL}/oauth/callback`, so there is only one value that
    can disagree with Google instead of two.
 
-### About the client secret
+### About the Google client secret
 
 The secret is confidential in Google's model for a Web-application client,
 and here it genuinely is one: it lives on the server, in the environment or
@@ -120,10 +127,9 @@ code is unusable without the verifier that never leaves the service.
 
 ## Microsoft Entra ID (Azure AD) Setup
 
-A working multi-tenant public client is embedded in
-`ccd/client_config.py`, so **this section is optional**. Follow it only if
-you forked the project, need a single-tenant app, or want the consent screen
-to carry your own name.
+Required: `ccd` ships no Microsoft client id. Unlike Google, the registration
+does not depend on where the service is deployed, so you do this once and
+reuse the id across installations.
 
 ### Prerequisites
 
@@ -163,12 +169,23 @@ to carry your own name.
    no secret, by design (that's what "Allow public client flows" means).
    `ccd`'s device-code and refresh-token requests never send one.
 
-5. **Copy the Application (client) ID** into `ccd/client_config.py`
-   (`_EMBEDDED_MS_CLIENT_ID`), or set `CCD_MS_CLIENT_ID`, or put it in
-   `client_config.json`. The authority defaults to
-   `https://login.microsoftonline.com/common` (works for both
-   organizational and personal accounts); override with `CCD_MS_AUTHORITY`
-   if you registered a single-tenant app instead.
+5. **Hand the Application (client) ID to the service**, the same way as the
+   Google one -- through the environment:
+
+   ```bash
+   export CCD_MS_CLIENT_ID=00000000-0000-0000-0000-000000000000
+   ```
+
+   or the `"microsoft"` section of `client_config.json`. Do **not** put it
+   back in `ccd/client_config.py`: a client id in the source tree cannot be
+   replaced without shipping a release, and it makes every deployment share
+   one application identity, one consent-screen name and one set of Entra
+   rate limits.
+
+   The authority defaults to `https://login.microsoftonline.com/common`,
+   which is Microsoft's own multi-tenant endpoint and works for both
+   organizational and personal accounts. Override it with `CCD_MS_AUTHORITY`
+   only if you registered a single-tenant app.
 
 ## Checking your work
 

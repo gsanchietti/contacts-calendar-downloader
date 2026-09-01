@@ -52,9 +52,10 @@ as an authorized redirect URI on a client of type **Web application**. Full
 walk-through, including the sensitive-scope review Google requires:
 [providers.md](providers.md).
 
-Microsoft needs nothing per installation -- ccd's device-code flow uses an
-embedded multi-tenant public client and involves no redirect URI. Register
-your own only if you want your name on the consent screen.
+Microsoft also needs a client id -- ccd ships none -- but unlike Google that
+registration is **not** per installation: the device-code flow uses no
+redirect URI, so one public client registration serves every deployment. Ship
+the same `CCD_MS_CLIENT_ID` with your module and users configure nothing.
 
 Plan for this in your module's UI: the fields for the Google client id and
 secret belong in your settings page, and the redirect URI to paste into
@@ -150,7 +151,9 @@ and everything non-secret through `agent.set_env()` as usual:
 ```python
 agent.set_env("CCD_BASE_URL", f"https://{host}/ccd")
 agent.set_env("CCD_GOOGLE_CLIENT_ID", request["google_client_id"])
-agent.set_env("CCD_MS_CLIENT_ID", request.get("ms_client_id", ""))
+# Your module's own Microsoft public client id -- a constant in your code,
+# not something the sysadmin has to supply. It is not a secret.
+agent.set_env("CCD_MS_CLIENT_ID", MS_CLIENT_ID)
 ```
 
 Do not echo `CCD_API_KEY` or `CCD_GOOGLE_CLIENT_SECRET` back from
