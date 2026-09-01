@@ -1,15 +1,15 @@
 """Google provider-specific helpers for contacts and calendar.
 
-This module contains the functions and constants that interact with Google APIs.
-It was extracted from the main application to make adding new providers easier.
+This module only knows how to talk to the People API and Calendar API given
+an already-authenticated service/credentials object. Authentication itself
+(the PKCE loopback flow, token storage, refresh) lives in ``ccd.auth_google``
+and ``ccd.store`` -- this module has no knowledge of where credentials come
+from.
 """
 from typing import Any, Dict, Iterable, List, Optional
 from datetime import datetime, timezone
-import os
 import dateutil.parser
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from icalendar import Calendar, Event
 
@@ -22,80 +22,14 @@ DEFAULT_SCOPES = [
 ]
 
 
-def authenticate_google(config, user_email: str) -> Optional[Any]:
-    """Authenticate a specific user and return an authorized People API service.
-    
-    Args:
-        config: Configuration object with database connection details
-        user_email: Email of the user to authenticate
-        save_credentials_fn: Callback function to save refreshed credentials
-            (typically save_user_credentials from main app)
-    
-    Returns:
-        Authenticated People API service object or None if authentication fails
-    """
-    # This needs to import at runtime to avoid circular imports
-    import database
-    
-    # Load credentials from database using the database's encryption methods
-    db = database.get_db(config)
-    creds_raw = db.load_user_credentials(user_email, provider='google')
-    
-    if not creds_raw:
-        return None
-
-    # creds_raw may be a google Credentials object (pickled) or a normalized dict
-    creds: Optional[Credentials] = None
-
-    # If it's already a Credentials-like object (has .valid), use it
-    if hasattr(creds_raw, 'valid'):
-        creds = creds_raw
-    elif isinstance(creds_raw, dict):
-        # Build a google.oauth2.credentials.Credentials from normalized dict
-        token = creds_raw.get('access_token')
-        refresh = creds_raw.get('refresh_token')
-        expires_at = creds_raw.get('expires_at')
-        scopes = creds_raw.get('scopes') or []
-
-        # token_uri and client credentials may be missing; use sensible defaults
-        token_uri = os.environ.get('GOOGLE_TOKEN_URI', 'https://oauth2.googleapis.com/token')
-        client_id = os.environ.get('GOOGLE_CLIENT_ID')
-        client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
-
-        creds = Credentials(
-            token=token,
-            refresh_token=refresh,
-            token_uri=token_uri,
-            client_id=client_id,
-            client_secret=client_secret,
-            scopes=scopes,
-            expiry=datetime.fromtimestamp(expires_at, tz=timezone.utc) if expires_at else None
-        )
-
-    if not creds or not getattr(creds, 'valid', False):
-        if getattr(creds, 'expired', False) and getattr(creds, 'refresh_token', None):
-            try:
-                if not creds:
-                    return None
-                creds.refresh(Request())
-                # Save refreshed credentials via callback
-                db.save_user_credentials(user_email, creds, provider='google')
-            except Exception:
-                return None
-        else:
-            return None  # Not authenticated
-
-    return build("people", "v1", credentials=creds, cache_discovery=False)
-
-
 def download_contacts(service, page_size: int = 1000, person_fields: str = "names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,nicknames,metadata") -> List[Dict]:
     """Fetch all contacts using the People API, handling pagination.
-    
+
     Args:
         service: Authenticated People API service
         page_size: Number of contacts to fetch per page
         person_fields: Comma-separated list of person fields to request
-    
+
     Returns:
         List of contact dicts from the People API
     """
@@ -129,7 +63,7 @@ def fetch_google_calendar(credentials) -> str:
     """
     service = build('calendar', 'v3', credentials=credentials)
 
-    now = datetime.utcnow().isoformat() + 'Z'
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     events_result = service.events().list(
         calendarId='primary',
         timeMin=now,
@@ -141,7 +75,7 @@ def fetch_google_calendar(credentials) -> str:
     events = events_result.get('items', [])
 
     cal = Calendar()
-    cal.add('prodid', '-//Google Contacts Downloader//Calendar Export//EN')
+    cal.add('prodid', '-//Contacts Calendar Downloader//Calendar Export//EN')
     cal.add('version', '2.0')
     cal.add('calscale', 'GREGORIAN')
     cal.add('method', 'PUBLISH')
@@ -205,48 +139,6 @@ def fetch_google_calendar(credentials) -> str:
         cal.add_component(event)
 
     return cal.to_ical().decode('utf-8')
-
-
-def handle_oauth_callback(config, flow):
-    """Complete a Google OAuth flow and return (user_email, credentials).
-
-    This function mirrors the previous _handle_google_oauth_callback in the
-    main application but returns the discovered email and credentials so the
-    caller can persist them (avoids circular imports).
-    """
-    # Import here to avoid overhead at module import time and circular deps
-    from flask import request
-    from googleapiclient.discovery import build
-
-    # Complete the OAuth flow
-    authorization_response = request.url
-    flow.fetch_token(authorization_response=authorization_response)
-    creds = flow.credentials
-
-    # Identify user. Try OAuth2 userinfo first, fallback to People API.
-    user_email = None
-    try:
-        oauth2_service = build("oauth2", "v2", credentials=creds, cache_discovery=False)
-        user_info = oauth2_service.userinfo().get().execute()
-        user_email = user_info.get('email')
-    except Exception:
-        pass
-
-    if not user_email:
-        try:
-            people_service = build("people", "v1", credentials=creds, cache_discovery=False)
-            profile = people_service.people().get(resourceName='people/me', personFields='emailAddresses').execute()
-            emails = profile.get('emailAddresses', [])
-            if emails:
-                primary_email = next((e['value'] for e in emails if e.get('metadata', {}).get('primary')), None)
-                user_email = primary_email or emails[0]['value']
-        except Exception:
-            pass
-
-    if not user_email:
-        raise ValueError("Could not identify user email from Google credentials")
-
-    return user_email, creds
 
 
 def extract_contact_row(person: Dict) -> Dict[str, str]:
@@ -322,63 +214,3 @@ def extract_contact_row(person: Dict) -> Dict[str, str]:
         "Country": _find_by_type(addresses, "home", "country") or _find_by_type(addresses, "work", "country"),
         "Resource Name": person.get("resourceName", ""),
     }
-
-
-def check_google_credentials_health(credentials_path) -> Dict[str, Any]:
-    """Check Google credentials file health.
-    
-    Args:
-        credentials_path: Path object or string to Google credentials file
-    
-    Returns:
-        Dict with 'status' ('ok' or 'error'), credentials info if ok, 'message' if error
-    """
-    import json
-    from pathlib import Path
-    
-    # Convert to Path object if string
-    if isinstance(credentials_path, str):
-        credentials_path = Path(credentials_path)
-    
-    if not credentials_path.exists():
-        return {
-            "status": "error",
-            "message": "Credentials file not found",
-            "path": str(credentials_path)
-        }
-    
-    try:
-        google_creds = json.loads(credentials_path.read_text())
-        
-        # Validate required fields for OAuth client
-        if "web" in google_creds or "installed" in google_creds:
-            creds_type = "web" if "web" in google_creds else "installed"
-            required_fields = ["client_id", "client_secret", "auth_uri", "token_uri"]
-            missing_fields = [f for f in required_fields if f not in google_creds.get(creds_type, {})]
-            
-            if missing_fields:
-                return {
-                    "status": "error",
-                    "message": f"Missing required fields: {', '.join(missing_fields)}"
-                }
-            
-            return {
-                "status": "ok",
-                "client_id": google_creds[creds_type]["client_id"][:20] + "..."
-            }
-        else:
-            return {
-                "status": "error",
-                "message": "Invalid credentials format (missing 'web' or 'installed' key)"
-            }
-    except json.JSONDecodeError as e:
-        return {
-            "status": "error",
-            "message": f"Invalid JSON: {str(e)}"
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-

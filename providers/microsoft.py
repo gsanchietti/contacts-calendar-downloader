@@ -1,19 +1,15 @@
 """Microsoft provider helpers for Contacts and Calendar via Microsoft Graph.
 
-This module implements the minimal functions needed to exchange tokens,
-fetch calendar events and map contacts to the CSV format used by the app.
-It intentionally uses simple token dicts stored by the application so the
-rest of the code can remain provider-agnostic.
+This module only knows how to call Microsoft Graph given an access token; it
+has no knowledge of how that token was obtained. Authentication (the device
+code flow, token storage, refresh) lives in ``ccd.auth_microsoft`` and
+``ccd.store``.
 """
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
-import time
 import requests
 import dateutil.parser
 from icalendar import Calendar, Event
-from flask import request
-import msal
-import json
 
 
 # Default OAuth scopes for Microsoft (v2.0 / Microsoft Graph)
@@ -25,76 +21,6 @@ DEFAULT_SCOPES = [
     "Contacts.Read",
     "Calendars.Read",
 ]
-
-
-def authenticate_microsoft(config, user_email: str) -> Optional[Dict[str, Any]]:
-    """Authenticate a specific user and return credentials dict for Microsoft Graph API.
-    
-    Args:
-        config: Configuration object with database connection details
-        user_email: Email of the user to authenticate
-        save_credentials_fn: Callback function to save refreshed credentials
-            (typically save_user_credentials from main app)
-    
-    Returns:
-        Credentials dict with access_token or None if authentication fails
-    """
-    # Import database module at runtime to avoid circular imports
-    import database
-    import sys
-    
-    print(f"[DEBUG] Authenticating Microsoft user: {user_email}", file=sys.stderr, flush=True)
-    
-    try:
-        # Load credentials from database using centralized encryption methods
-        db = database.get_db(config)
-        creds = db.load_user_credentials(user_email, provider='microsoft')
-        
-        print(f"[DEBUG] Loaded Microsoft credentials for {user_email}: {creds is not None}", file=sys.stderr, flush=True)
-        
-        if not creds:
-            print(f"[DEBUG] No credentials found for {user_email}", file=sys.stderr, flush=True)
-            return None
-    except Exception as e:
-        print(f"❌ Failed to load Microsoft credentials for {user_email}: {e}", file=sys.stderr, flush=True)
-        import traceback
-        traceback.print_exc(file=sys.stderr)
-        return None
-    
-    if not creds:
-        return None
-    
-    # Check if token needs refresh
-    if creds.get('expires_at') and time.time() > creds['expires_at'] and creds.get('refresh_token'):
-        # Attempt token refresh
-        ms_creds_path = config.microsoft_credentials_path
-        if ms_creds_path.exists():
-            ms_creds = json.loads(ms_creds_path.read_text())
-            token_url = f"https://login.microsoftonline.com/{ms_creds.get('tenant', 'common')}/oauth2/v2.0/token"
-            data = {
-                'client_id': ms_creds.get('client_id'),
-                'client_secret': ms_creds.get('client_secret'),
-                'grant_type': 'refresh_token',
-                'refresh_token': creds.get('refresh_token'),
-                'scope': ' '.join(creds.get('scopes', []))
-            }
-            try:
-                resp = requests.post(token_url, data=data, timeout=10)
-                resp.raise_for_status()
-                token_result = resp.json()
-                creds['access_token'] = token_result.get('access_token')
-                creds['refresh_token'] = token_result.get('refresh_token', creds.get('refresh_token'))
-                creds['expires_at'] = int(time.time()) + int(token_result.get('expires_in', 0))
-                # Save refreshed credentials
-                db.save_user_credentials(user_email, creds, provider='microsoft')
-            except Exception:
-                return None
-    
-    # Verify we have a valid access token
-    if not creds.get('access_token'):
-        return None
-    
-    return creds
 
 
 def _graph_get(url: str, access_token: str, params: Optional[Dict] = None) -> Dict:
@@ -114,7 +40,7 @@ def fetch_microsoft_calendar(credentials: Dict[str, Any]) -> str:
         raise RuntimeError("Missing access token for Microsoft Graph")
 
     # Get events from the user's default calendar (next 1000 events)
-    now = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     url = "https://graph.microsoft.com/v1.0/me/events"
     params = {"$orderby": "start/dateTime", "$top": 1000, "$filter": f"start/dateTime ge '{now}'"}
 
@@ -122,7 +48,7 @@ def fetch_microsoft_calendar(credentials: Dict[str, Any]) -> str:
     events = data.get("value", [])
 
     cal = Calendar()
-    cal.add('prodid', '-//Contacts Downloader//Microsoft Calendar Export//EN')
+    cal.add('prodid', '-//Contacts Calendar Downloader//Microsoft Calendar Export//EN')
     cal.add('version', '2.0')
     cal.add('calscale', 'GREGORIAN')
     cal.add('method', 'PUBLISH')
@@ -260,126 +186,3 @@ def extract_contact_row(contact: Dict) -> Dict[str, str]:
 def get_profile(access_token: str) -> Dict:
     """Return the /me profile using Graph with the given access token."""
     return _graph_get('https://graph.microsoft.com/v1.0/me', access_token)
-
-
-def handle_oauth_callback(config, flow_row):
-    """Complete a Microsoft OAuth flow and return (user_email, creds_dict).
-
-    flow_row is the DB row stored for the flow and should contain 'redirect_uri'
-    and 'scopes' (JSON list). This function performs the code->token exchange
-    using MSAL and returns the discovered user email and a normalized token dict
-    suitable for persisting by the caller.
-    """
-    code = request.args.get('code')
-    if not code:
-        raise ValueError('Missing authorization code')
-
-    # Read Microsoft app credentials path from config
-    ms_creds_path = config.microsoft_credentials_path
-    if not ms_creds_path.exists():
-        raise ValueError(f"Microsoft credentials file not found: {ms_creds_path}")
-    ms_creds = json.loads(ms_creds_path.read_text())
-
-    client_id = ms_creds.get('client_id')
-    client_secret = ms_creds.get('client_secret')
-    tenant = ms_creds.get('tenant', 'common')
-    authority = f"https://login.microsoftonline.com/{tenant}"
-
-    app_msal = msal.ConfidentialClientApplication(
-        client_id=client_id,
-        client_credential=client_secret,
-        authority=authority
-    )
-
-    # Ensure flow_row typing
-    flow_row = flow_row
-    redirect_uri = flow_row['redirect_uri']
-    scopes = json.loads(flow_row['scopes'])
-
-    # MSAL authorization URL builder filters out OIDC reserved scopes; use
-    # the same filtered scopes when exchanging the code for tokens.
-    msal_scopes = [s for s in scopes if s.lower() not in ('openid', 'profile', 'offline_access')]
-
-    token_result = app_msal.acquire_token_by_authorization_code(
-        code,
-        scopes=msal_scopes,
-        redirect_uri=redirect_uri,
-    )
-
-    if 'access_token' not in token_result:
-        raise ValueError(f"Failed to acquire Microsoft token: {token_result}")
-
-    creds = {
-        'access_token': token_result.get('access_token'),
-        'refresh_token': token_result.get('refresh_token'),
-        'expires_at': int(time.time()) + int(token_result.get('expires_in', 0)),
-        'scopes': scopes,
-        'id_token': token_result.get('id_token'),
-        'redirect_uri': redirect_uri,
-        'tenant': tenant,
-    }
-
-    try:
-        me = get_profile(creds['access_token'])
-        user_email = me.get('userPrincipalName') or me.get('mail') or me.get('userPrincipalName')
-    except Exception:
-        user_email = None
-
-    if not user_email:
-        raise ValueError('Could not identify Microsoft user email')
-
-    return user_email, creds
-
-
-def check_microsoft_credentials_health(credentials_path) -> Dict[str, Any]:
-    """Check Microsoft credentials file health.
-    
-    Args:
-        credentials_path: Path object or string to Microsoft credentials file
-    
-    Returns:
-        Dict with 'status' ('ok' or 'error'), credentials info if ok, 'message' if error
-    """
-    import json
-    from pathlib import Path
-    
-    # Convert to Path object if string
-    if isinstance(credentials_path, str):
-        credentials_path = Path(credentials_path)
-    
-    if not credentials_path.exists():
-        return {
-            "status": "error",
-            "message": "Credentials file not found",
-            "path": str(credentials_path)
-        }
-    
-    try:
-        ms_creds = json.loads(credentials_path.read_text())
-        
-        # Validate required fields for Azure app registration
-        required_fields = ["client_id", "client_secret", "tenant"]
-        missing_fields = [f for f in required_fields if not ms_creds.get(f)]
-        
-        if missing_fields:
-            return {
-                "status": "error",
-                "message": f"Missing required fields: {', '.join(missing_fields)}"
-            }
-        
-        return {
-            "status": "ok",
-            "client_id": ms_creds["client_id"][:20] + "...",
-            "tenant": ms_creds["tenant"]
-        }
-    except json.JSONDecodeError as e:
-        return {
-            "status": "error",
-            "message": f"Invalid JSON: {str(e)}"
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "contacts-calendar-downloader"
+version = "3.0.0"
+description = "Self-hosted service and CLI to download your own contacts and calendar from Google or Microsoft"
+readme = "README.md"
+license = { text = "GPL-3.0-only" }
+requires-python = ">=3.9"
+dependencies = [
+    "google-api-python-client",
+    "google-auth",
+    "google-auth-httplib2",
+    "msal",
+    "requests",
+    "icalendar",
+    "python-dateutil",
+]
+
+[project.scripts]
+ccd = "ccd.cli:main"
+
+[tool.setuptools]
+packages = ["ccd", "providers"]

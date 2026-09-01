@@ -1,22 +1,11 @@
-# Environment and configuration files
-.env
-.env.local
-.env.production
+# Local ccd config/state (when developing with CCD_CONFIG_DIR pointed at the repo)
+.ccd-config/
 
-# Docker/Podman override files (if using custom configurations)
-compose.override.yml
-docker-compose.override.yml
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
-# Google API credentials
-credentials.json
-client_secret*.json
-token.pickle
-tv.json
+# Operator-provided OAuth client overrides (contains a client secret)
+client_config.json
+# Local shell env holding CCD_GOOGLE_CLIENT_SECRET. The 'env/' rule below
+# only covers a directory of that name, not this file.
+/env
 
 # Python
 __pycache__/
@@ -27,7 +16,6 @@ __pycache__/
 build/
 develop-eggs/
 dist/
-downloads/
 eggs/
 .eggs/
 lib/
@@ -42,6 +30,7 @@ wheels/
 MANIFEST
 
 # Virtual environments
+.venv/
 venv/
 env/
 ENV/
@@ -57,17 +46,10 @@ ENV/
 *.log
 logs/
 
-# Docker
-.dockerignore
-
-# Data directories
-data/
-google-contacts-data/
-
-# Backup files
-*.backup
-*.bak
-
 # OS
 .DS_Store
 Thumbs.db
+
+# Local scratch notes and tool state (never commit: desktop.md holds OAuth client values)
+.serena/
+desktop.md

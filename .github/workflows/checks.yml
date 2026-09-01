@@ -1,0 +1,31 @@
+name: Checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Byte-compile
+        run: python3 -m py_compile ccd/*.py providers/*.py tools/*.py
+
+      # PyYAML is a development dependency only -- the service never parses
+      # the spec, so it is deliberately absent from requirements.txt.
+      - name: Install check dependencies
+        run: pip install pyyaml
+
+      # docs/openapi.yaml is hand-written and is not served by the service, so
+      # nothing but this stops it drifting from the routes that are.
+      - name: OpenAPI matches the route table
+        run: python3 tools/check_openapi.py

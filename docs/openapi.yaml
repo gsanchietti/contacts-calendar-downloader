@@ -1,0 +1,722 @@
+# OpenAPI contract for the ccd HTTP service.
+#
+# Hand-written, and the single source of truth for the API. It is NOT served
+# by the service and NOT shipped inside the container image -- read it here.
+#
+# tools/check_openapi.py compares every (method, path) in this file against the
+# ROUTES table in ccd/server.py, in both directions, and checks that each
+# operation's security matches whether the router demands an API key. CI runs
+# it, so adding or renaming a route means editing this file in the same commit.
+openapi: 3.1.0
+info:
+  title: contacts-calendar-downloader
+  version: 3.0.0
+  summary: Download your own contacts and calendar from Google or Microsoft.
+  description: |-
+    A single-host service that links Google and Microsoft accounts over OAuth 2.0 and exposes each linked account's contacts and calendar at a stable secret URL.
+
+    `/api/*` requires a bearer API key. The per-account `/d/{download_token}/...` URLs take no key: the token in the path is the credential, so treat those URLs as secrets and rotate one with `POST /api/accounts/{provider}/{email}/rotate-token` if it leaks.
+
+    The service is normally embedded under another application's hostname behind a path prefix (`https://voice.example.com/ccd`), with the proxy stripping the prefix before forwarding. Set `CCD_BASE_URL` to the externally visible base including that prefix; every URL the service hands out is built from it.
+  license:
+    name: GPL-3.0-only
+    identifier: GPL-3.0-only
+servers:
+- url: http://127.0.0.1:8080
+  description: Default loopback listener.
+- url: https://{host}/ccd
+  description: Embedded behind a proxy path prefix.
+  variables:
+    host:
+      default: voice.example.com
+tags:
+- name: login
+  description: Linking a Google or Microsoft account.
+- name: accounts
+  description: Inspecting and unlinking accounts.
+- name: download
+  description: Public per-account data URLs.
+- name: meta
+  description: Health and machine-readable contract.
+security:
+- bearerAuth: []
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe.
+      operationId: health
+      tags:
+      - meta
+      security: []
+      responses:
+        '200':
+          description: The service is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    const: ok
+                required:
+                - status
+  /oauth/callback:
+    get:
+      summary: Google's redirect target.
+      description: Where the user's browser lands after Google consent. Not called by applications --
+        register `{CCD_BASE_URL}/oauth/callback` as the redirect URI of a Google OAuth client of type
+        "Web application" and let the browser reach it. Returns a small HTML page; the authoritative result
+        is what `GET /api/login/{login_id}` reports.
+      operationId: oauthCallback
+      tags:
+      - login
+      security: []
+      parameters:
+      - name: state
+        in: query
+        required: true
+        description: The login_id the flow was started with.
+        schema:
+          type: string
+      - name: code
+        in: query
+        required: false
+        description: Authorization code, when consent succeeded.
+        schema:
+          type: string
+      - name: error
+        in: query
+        required: false
+        description: Error code, when the user declined or Google refused.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Consent completed; the account is linked.
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: The sign-in request was unknown, expired, or failed.
+          content:
+            text/html:
+              schema:
+                type: string
+  /d/{download_token}/contacts.csv:
+    get:
+      summary: Download contacts as CSV.
+      description: 'Public by secret URL: no API key, the token in the path is the credential. Returns
+        404 for an unknown token without distinguishing a wrong token from an account with no data. Columns
+        are the shared contact schema, identical across providers.'
+      operationId: downloadContactsCsv
+      tags:
+      - download
+      security: []
+      parameters:
+      - name: download_token
+        in: path
+        required: true
+        description: The account's stable secret download token. Anyone holding it can read that account's
+          data.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The rendered file, as an attachment.
+          headers:
+            Content-Disposition:
+              description: attachment; filename="..."
+              schema:
+                type: string
+          content:
+            text/csv:
+              schema:
+                type: string
+        '404':
+          description: Not found, or no such linked account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Stored credentials can no longer be refreshed; link the account again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: The provider's API rejected or failed the request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /d/{download_token}/contacts.json:
+    get:
+      summary: Download contacts as JSON.
+      description: 'Public by secret URL: no API key, the token in the path is the credential. Returns
+        404 for an unknown token without distinguishing a wrong token from an account with no data. An
+        array of objects keyed by the same column names as the CSV export.'
+      operationId: downloadContactsJson
+      tags:
+      - download
+      security: []
+      parameters:
+      - name: download_token
+        in: path
+        required: true
+        description: The account's stable secret download token. Anyone holding it can read that account's
+          data.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The rendered file, as an attachment.
+          headers:
+            Content-Disposition:
+              description: attachment; filename="..."
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: string
+        '404':
+          description: Not found, or no such linked account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Stored credentials can no longer be refreshed; link the account again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: The provider's API rejected or failed the request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /d/{download_token}/calendar.ics:
+    get:
+      summary: Download the calendar as iCalendar.
+      description: 'Public by secret URL: no API key, the token in the path is the credential. Returns
+        404 for an unknown token without distinguishing a wrong token from an account with no data. A
+        single VCALENDAR covering the account''s events.'
+      operationId: downloadCalendarIcs
+      tags:
+      - download
+      security: []
+      parameters:
+      - name: download_token
+        in: path
+        required: true
+        description: The account's stable secret download token. Anyone holding it can read that account's
+          data.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The rendered file, as an attachment.
+          headers:
+            Content-Disposition:
+              description: attachment; filename="..."
+              schema:
+                type: string
+          content:
+            text/calendar:
+              schema:
+                type: string
+        '404':
+          description: Not found, or no such linked account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Stored credentials can no longer be refreshed; link the account again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: The provider's API rejected or failed the request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/login:
+    post:
+      summary: Start linking an account.
+      description: |-
+        The two providers answer differently and both shapes must be handled. Google returns `kind: "redirect"` with an `authorization_url` to open in a browser. Microsoft returns `kind: "device"` with a `verification_uri` and a `user_code` for the user to type. Either way, poll `GET /api/login/{login_id}` until it reports `done` or `error`.
+
+        Pending logins are held in memory and expire after 20 minutes; a service restart cancels any that are in flight.
+      operationId: startLogin
+      tags:
+      - login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - provider
+              properties:
+                provider:
+                  type: string
+                  enum:
+                  - google
+                  - microsoft
+      responses:
+        '201':
+          description: Login started.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginStart'
+        '400':
+          description: Bad request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or invalid API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/login/{login_id}:
+    get:
+      summary: Poll a login in progress.
+      operationId: loginStatus
+      tags:
+      - login
+      parameters:
+      - name: login_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Current state of the login.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginStatus'
+        '401':
+          description: Missing or invalid API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or no such linked account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/accounts:
+    get:
+      summary: List linked accounts.
+      operationId: listAccounts
+      tags:
+      - accounts
+      responses:
+        '200':
+          description: Every linked account.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Account'
+        '401':
+          description: Missing or invalid API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/accounts/{provider}/{email}:
+    get:
+      summary: Show one linked account.
+      operationId: getAccount
+      tags:
+      - accounts
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        description: OAuth provider the account is linked on.
+        schema:
+          type: string
+          enum:
+          - google
+          - microsoft
+      - name: email
+        in: path
+        required: true
+        description: URL-encoded email address of the linked account.
+        schema:
+          type: string
+        example: you%40example.com
+      responses:
+        '200':
+          description: The account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          description: Missing or invalid API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or no such linked account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Unlink an account.
+      description: Always removes the locally stored credentials. With `revoke=true` it also asks the
+        provider to drop the grant -- Google supports that; Microsoft has no programmatic per-app revoke
+        for public clients, so the response says where the user can remove access by hand.
+      operationId: deleteAccount
+      tags:
+      - accounts
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        description: OAuth provider the account is linked on.
+        schema:
+          type: string
+          enum:
+          - google
+          - microsoft
+      - name: email
+        in: path
+        required: true
+        description: URL-encoded email address of the linked account.
+        schema:
+          type: string
+        example: you%40example.com
+      - name: revoke
+        in: query
+        required: false
+        description: Also revoke the grant with the provider.
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '200':
+          description: The account was removed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResult'
+        '401':
+          description: Missing or invalid API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or no such linked account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/accounts/{provider}/{email}/status:
+    get:
+      summary: Check an account against the provider.
+      description: Refreshes the access token if needed and makes one cheap authenticated call.
+      operationId: accountStatus
+      tags:
+      - accounts
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        description: OAuth provider the account is linked on.
+        schema:
+          type: string
+          enum:
+          - google
+          - microsoft
+      - name: email
+        in: path
+        required: true
+        description: URL-encoded email address of the linked account.
+        schema:
+          type: string
+        example: you%40example.com
+      responses:
+        '200':
+          description: Check result. A failed check is reported in the body, not as an error status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountStatus'
+        '401':
+          description: Missing or invalid API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or no such linked account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/accounts/{provider}/{email}/rotate-token:
+    post:
+      summary: Issue a fresh download token.
+      description: Invalidates the account's existing download URLs immediately. Use it when one leaks.
+      operationId: rotateDownloadToken
+      tags:
+      - accounts
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        description: OAuth provider the account is linked on.
+        schema:
+          type: string
+          enum:
+          - google
+          - microsoft
+      - name: email
+        in: path
+        required: true
+        description: URL-encoded email address of the linked account.
+        schema:
+          type: string
+        example: you%40example.com
+      responses:
+        '200':
+          description: The account, with its new download URLs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          description: Missing or invalid API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or no such linked account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: The service's API key, from `CCD_API_KEY` or generated into `api_key` in the config
+        directory on first start.
+  schemas:
+    Error:
+      type: object
+      required:
+      - error
+      - code
+      properties:
+        error:
+          type: string
+          description: Human-readable message.
+        code:
+          type: string
+          enum:
+          - error
+          - no_accounts
+          - auth_expired
+          - provider_api
+          - internal
+          description: 'Machine-readable cause. `no_accounts`: no such account or login. `auth_expired`:
+            the refresh token is dead, link the account again. `provider_api`: Google or Microsoft failed
+            the data request.'
+    DownloadUrls:
+      type: object
+      description: Public URLs for this account. They embed the account's secret token -- treat them as
+        credentials.
+      required:
+      - contacts_csv
+      - contacts_json
+      - calendar_ics
+      properties:
+        contacts_csv:
+          type: string
+          format: uri
+        contacts_json:
+          type: string
+          format: uri
+        calendar_ics:
+          type: string
+          format: uri
+    Account:
+      type: object
+      description: A linked account. OAuth tokens are never included.
+      required:
+      - provider
+      - email
+      - expired
+      - download
+      properties:
+        provider:
+          type: string
+          enum:
+          - google
+          - microsoft
+        email:
+          type: string
+          format: email
+        expires_at:
+          type: number
+          description: Unix time the access token expires.
+        expired:
+          type: boolean
+        expires_in:
+          type:
+          - integer
+          - 'null'
+          description: Seconds until expiry, null once expired.
+        scopes:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: number
+        updated_at:
+          type: number
+        download:
+          $ref: '#/components/schemas/DownloadUrls'
+    AccountStatus:
+      type: object
+      required:
+      - provider
+      - email
+      - expired
+      - live_check
+      properties:
+        provider:
+          type: string
+          enum:
+          - google
+          - microsoft
+        email:
+          type: string
+          format: email
+        expired:
+          type: boolean
+        expires_in:
+          type:
+          - integer
+          - 'null'
+        live_check:
+          type: string
+          enum:
+          - ok
+          - failed
+        error:
+          type:
+          - string
+          - 'null'
+        auth_expired:
+          type: boolean
+          description: True when the failure means the account must be linked again.
+    LoginStart:
+      type: object
+      required:
+      - login_id
+      - provider
+      - kind
+      properties:
+        login_id:
+          type: string
+        provider:
+          type: string
+          enum:
+          - google
+          - microsoft
+        kind:
+          type: string
+          enum:
+          - redirect
+          - device
+        authorization_url:
+          type: string
+          format: uri
+          description: 'kind=redirect only: open this in the user''s browser.'
+        verification_uri:
+          type: string
+          format: uri
+          description: 'kind=device only: short URL for the user to visit.'
+        user_code:
+          type: string
+          description: 'kind=device only: code for the user to type.'
+        message:
+          type: string
+          description: 'kind=device only: ready-made instructions.'
+        expires_in:
+          type: integer
+    LoginStatus:
+      type: object
+      required:
+      - status
+      - provider
+      properties:
+        status:
+          type: string
+          enum:
+          - pending
+          - done
+          - error
+        provider:
+          type: string
+          enum:
+          - google
+          - microsoft
+        account:
+          allOf:
+          - $ref: '#/components/schemas/Account'
+          description: status=done only.
+        error:
+          type: string
+          description: status=error only.
+    LogoutResult:
+      type: object
+      required:
+      - removed
+      - revoked
+      - note
+      properties:
+        removed:
+          type: boolean
+          description: Local credentials were deleted.
+        revoked:
+          type: boolean
+          description: The provider confirmed the grant was revoked.
+        note:
+          type: string
+          description: What the caller should tell the user.
